@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://battlescene"]
+
+[ext_resource type="Script" path="res://scripts/battle/BattleAnimator.gd" id="1_batlanim"]
+
+[node name="BattleScene" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_batlanim")
