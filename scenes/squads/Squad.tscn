@@ -1,0 +1,27 @@
+[gd_scene load_steps=2 format=3 uid="uid://squad_scene"]
+
+[ext_resource type="Script" path="res://scripts/squads/Squad.gd" id="1_squad"]
+
+[node name="Squad" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_squad")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+
+[node name="NavAgent" type="NavigationAgent3D" parent="."]
+
+[node name="HighlightRing" type="MeshInstance3D" parent="."]
+
+[node name="Label3D" type="Label3D" parent="."]
+text = "Squad"
+
+[node name="DetectionArea" type="Area3D" parent="."]
+collision_layer = 4
+collision_mask = 4
+monitoring = true
+monitorable = true
+
+[node name="AreaShape" type="CollisionShape3D" parent="DetectionArea"]

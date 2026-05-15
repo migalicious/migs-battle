@@ -1,7 +1,22 @@
-[gd_scene format=3 uid="uid://main"]
+[gd_scene load_steps=5 format=3 uid="uid://main"]
+
+[ext_resource type="PackedScene" path="res://scenes/map/MapManager.tscn" id="1_map"]
+[ext_resource type="Script" path="res://scripts/ui/CameraController.gd" id="2_cam"]
+[ext_resource type="Script" path="res://scripts/squads/SquadController.gd" id="3_sqctrl"]
+[ext_resource type="PackedScene" path="res://scenes/squads/SquadInspector.tscn" id="4_insp"]
 
 [node name="Main" type="Node3D"]
 
+[node name="MapManager" parent="." instance=ExtResource("1_map")]
+
+[node name="Squads" type="Node3D" parent="."]
+script = ExtResource("3_sqctrl")
+
 [node name="Camera" type="Camera3D" parent="."]
-position = Vector3(0, 20, 0)
-rotation = Vector3(-1.5708, 0, 0)
+position = Vector3(0, 28, 14)
+rotation = Vector3(-1.1, 0, 0)
+script = ExtResource("2_cam")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="SquadInspector" parent="HUD" instance=ExtResource("4_insp")]

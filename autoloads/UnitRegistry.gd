@@ -105,7 +105,7 @@ func _build_default_classes() -> void:
 	fighter.movement_type = INF; fighter.base_move_speed = 3.0; fighter.can_lead = false
 	fighter.front_attacks = [_atk("Slash", P, 2, 1.0, FR)]
 	fighter.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
-	fighter.promotions    = [_promo("knight",4), _promo("archer",4), _promo("mage",4)]
+	fighter.promotions    = [_promo("knight",5), _promo("archer",4), _promo("mage",4)]
 	_reg(fighter)
 
 	# --- Knight ---

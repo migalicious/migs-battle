@@ -5,7 +5,6 @@ extends Resource
 @export var faction: int = 0
 @export var units: Array[UnitData] = []
 
-# Derived at runtime — call recalculate_speed() after any unit change
 var move_speed: float = 0.0
 var movement_type: TerrainDefs.MovementType = TerrainDefs.MovementType.INFANTRY
 
@@ -30,15 +29,23 @@ func get_alive_units() -> Array[UnitData]:
 
 func recalculate_speed(terrain: TerrainDefs.TerrainType) -> void:
 	var leader := get_leader()
-	if leader:
-		var leader_cls: ClassDefinition = UnitRegistry.get_class_def(leader.class_id) as ClassDefinition
-		if leader_cls:
-			movement_type = leader_cls.movement_type
+	if not leader:
+		move_speed = 0.0
+		return
+	var leader_cls: ClassDefinition = UnitRegistry.get_class_def(leader.class_id) as ClassDefinition
+	if not leader_cls:
+		move_speed = 0.0
+		return
 
-	var min_speed := INF
+	movement_type = leader_cls.movement_type
+	var multiplier := TerrainDefs.get_speed(movement_type, terrain)
+	if multiplier == 0.0:
+		move_speed = 0.0
+		return
+
+	var min_base := INF
 	for u in get_alive_units():
 		var cls: ClassDefinition = UnitRegistry.get_class_def(u.class_id) as ClassDefinition
 		if cls:
-			var spd := TerrainDefs.get_speed(cls.movement_type, terrain)
-			min_speed = min(min_speed, spd)
-	move_speed = min_speed if min_speed != INF else 0.0
+			min_base = min(min_base, cls.base_move_speed)
+	move_speed = (min_base * multiplier) if min_base != INF else 0.0

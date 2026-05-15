@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://mapmgr"]
+
+[ext_resource type="Script" path="res://scripts/map/MapManager.gd" id="1_mgr"]
+
+[node name="MapManager" type="Node3D"]
+script = ExtResource("1_mgr")

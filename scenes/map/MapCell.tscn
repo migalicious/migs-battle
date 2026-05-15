@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://mapcell"]
+
+[ext_resource type="Script" path="res://scripts/map/MapCell.gd" id="1_mapcell"]
+
+[node name="MapCell" type="StaticBody3D"]
+script = ExtResource("1_mapcell")
