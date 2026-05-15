@@ -32,9 +32,7 @@ extends Resource
 @export var back_attacks: Array[AttackDefinition] = []
 @export var promotions: Array[PromotionRequirement] = []
 
-func apply_level_up(unit: UnitData) -> void:
-	unit.level += 1
-	unit.xp_to_next = 100 * unit.level
+func apply_stat_growth(unit: UnitData) -> void:
 	unit.max_hp += randi_range(hp_growth.x, hp_growth.y)
 	unit.hp = unit.max_hp
 	unit.strength += randi_range(str_growth.x, str_growth.y)

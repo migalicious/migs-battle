@@ -17,9 +17,9 @@ config/main_scene="res://scenes/main/Main.tscn"
 
 [autoload]
 
-GameState="*res://autoloads/GameState.gd"
 UnitRegistry="*res://autoloads/UnitRegistry.gd"
 BattleManager="*res://autoloads/BattleManager.gd"
+GameState="*res://autoloads/GameState.gd"
 
 [physics]
 

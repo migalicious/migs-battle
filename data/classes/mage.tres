@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ClassDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_t0fo8"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_gf0sj"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_6seil"]
+
+[sub_resource type="Resource" id="Resource_6ivc7"]
+script = ExtResource("1_t0fo8")
+attack_name = "Magic"
+damage_type = 1
+hits = 2
+power_multiplier = 1.2
+
+[sub_resource type="Resource" id="Resource_1aw3n"]
+script = ExtResource("1_t0fo8")
+attack_name = "Staff"
+power_multiplier = 0.6
+
+[sub_resource type="Resource" id="Resource_oh764"]
+script = ExtResource("2_gf0sj")
+target_class_id = "sorcerer"
+required_level = 12
+
+[resource]
+script = ExtResource("3_6seil")
+class_id = "mage"
+display_name = "Mage"
+placeholder_color = Color(0.6, 0.2, 0.8, 1)
+base_hp = 16
+base_strength = 3
+base_intelligence = 9
+base_defense = 3
+base_resistance = 8
+hp_growth = Vector2i(2, 4)
+str_growth = Vector2i(1, 2)
+agi_growth = Vector2i(1, 2)
+int_growth = Vector2i(4, 6)
+def_growth = Vector2i(1, 2)
+res_growth = Vector2i(3, 4)
+can_lead = true
+front_attacks = Array[ExtResource("1_t0fo8")]([SubResource("Resource_1aw3n")])
+back_attacks = Array[ExtResource("1_t0fo8")]([SubResource("Resource_6ivc7")])
+promotions = Array[ExtResource("2_gf0sj")]([SubResource("Resource_oh764")])

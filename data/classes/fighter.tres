@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="ClassDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_pjtn8"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_27sjw"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_5i77r"]
+
+[sub_resource type="Resource" id="Resource_3cbce"]
+script = ExtResource("1_pjtn8")
+attack_name = "Slash"
+power_multiplier = 0.8
+
+[sub_resource type="Resource" id="Resource_riule"]
+script = ExtResource("1_pjtn8")
+attack_name = "Slash"
+hits = 2
+
+[sub_resource type="Resource" id="Resource_27g4u"]
+script = ExtResource("2_27sjw")
+target_class_id = "knight"
+required_level = 4
+
+[sub_resource type="Resource" id="Resource_te7x4"]
+script = ExtResource("2_27sjw")
+target_class_id = "archer"
+required_level = 4
+
+[sub_resource type="Resource" id="Resource_81tom"]
+script = ExtResource("2_27sjw")
+target_class_id = "mage"
+required_level = 4
+
+[resource]
+script = ExtResource("3_5i77r")
+class_id = "fighter"
+display_name = "Fighter"
+placeholder_color = Color(0.47, 0.53, 0.6, 1)
+base_hp = 22
+base_strength = 7
+base_agility = 6
+base_intelligence = 3
+base_defense = 6
+base_resistance = 3
+hp_growth = Vector2i(4, 6)
+str_growth = Vector2i(2, 4)
+agi_growth = Vector2i(2, 3)
+def_growth = Vector2i(2, 3)
+front_attacks = Array[ExtResource("1_pjtn8")]([SubResource("Resource_riule")])
+back_attacks = Array[ExtResource("1_pjtn8")]([SubResource("Resource_3cbce")])
+promotions = Array[ExtResource("2_27sjw")]([SubResource("Resource_27g4u"), SubResource("Resource_te7x4"), SubResource("Resource_81tom")])

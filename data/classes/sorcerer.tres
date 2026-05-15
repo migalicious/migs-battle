@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="ClassDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_5cok1"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_lklp5"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_37qb2"]
+
+[sub_resource type="Resource" id="Resource_nw761"]
+script = ExtResource("1_5cok1")
+attack_name = "Arcane Blast"
+damage_type = 5
+hits = 2
+power_multiplier = 1.5
+hits_all_in_column = true
+
+[sub_resource type="Resource" id="Resource_xbyn3"]
+script = ExtResource("1_5cok1")
+attack_name = "Staff"
+power_multiplier = 0.6
+
+[resource]
+script = ExtResource("3_37qb2")
+class_id = "sorcerer"
+display_name = "Sorcerer"
+placeholder_color = Color(0.35, 0.1, 0.5, 1)
+base_strength = 4
+base_intelligence = 13
+base_defense = 4
+base_resistance = 12
+str_growth = Vector2i(1, 2)
+agi_growth = Vector2i(1, 2)
+int_growth = Vector2i(5, 7)
+def_growth = Vector2i(1, 2)
+res_growth = Vector2i(4, 5)
+can_lead = true
+front_attacks = Array[ExtResource("1_5cok1")]([SubResource("Resource_xbyn3")])
+back_attacks = Array[ExtResource("1_5cok1")]([SubResource("Resource_nw761")])
