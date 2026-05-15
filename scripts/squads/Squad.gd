@@ -12,6 +12,10 @@ var faction: int = 0
 # Set by SquadController to prevent double-battle triggers
 var in_battle: bool = false
 
+# Garrison state
+var is_garrisoned: bool = false
+var garrison_town: TownNode = null
+
 @onready var _nav_agent: NavigationAgent3D = $NavAgent
 @onready var _label: Label3D = $Label3D
 @onready var _highlight: MeshInstance3D = $HighlightRing
@@ -98,6 +102,9 @@ func _update_label() -> void:
 	_label.text = leader.unit_name if leader else "???"
 
 func _physics_process(_delta: float) -> void:
+	if is_garrisoned:
+		velocity = Vector3.ZERO
+		return
 	if not _is_moving or not squad_data:
 		velocity = Vector3.ZERO
 		return
@@ -146,6 +153,22 @@ func deselect_squad() -> void:
 
 func is_selected() -> bool:
 	return _is_selected
+
+func garrison_at(town: TownNode) -> void:
+	is_garrisoned = true
+	garrison_town = town
+	_is_moving = false
+	velocity = Vector3.ZERO
+
+func ungarrison() -> void:
+	is_garrisoned = false
+	garrison_town = null
+
+func retreat_to(world_pos: Vector3) -> void:
+	global_position = Vector3(world_pos.x, 0.5, world_pos.z)
+	_is_moving = false
+	is_garrisoned = false
+	garrison_town = null
 
 func _update_terrain_speed() -> void:
 	if not squad_data:

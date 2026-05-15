@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3 uid="uid://town_menu"]
+
+[ext_resource type="Script" path="res://scripts/ui/TownMenu.gd" id="1_tmenu"]
+
+[node name="TownMenu" type="Panel"]
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_right = 150.0
+offset_top = -180.0
+offset_bottom = 180.0
+visible = false
+script = ExtResource("1_tmenu")
