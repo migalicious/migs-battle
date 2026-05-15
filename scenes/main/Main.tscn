@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://main"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(0, 20, 0)
+rotation = Vector3(-1.5708, 0, 0)
