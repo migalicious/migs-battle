@@ -1,3 +1,4 @@
+class_name SquadController
 extends Node3D
 
 const _SQUAD_SCENE := preload("res://scenes/squads/Squad.tscn")
@@ -29,7 +30,7 @@ func _init_refs() -> void:
 
 func _spawn_squads() -> void:
 	_spawn_player_squads()
-	_spawn_enemy_squads()
+	# Enemy squads are spawned by AIFaction._setup()
 
 func _spawn_player_squads() -> void:
 	var hq := _map_manager.get_hq(TerrainDefs.Faction.PLAYER)
@@ -43,7 +44,7 @@ func _spawn_player_squads() -> void:
 	add_child(sq0)
 	sq0.global_position = Vector3(base_pos.x, 0.5, base_pos.z + 2.5)
 	sq0.setup(data0)
-	_wire_squad(sq0)
+	wire_squad(sq0)
 	GameState.player_squads.append(sq0)
 
 	# Put squad 1 in reserve for TownMenu deployment
@@ -60,10 +61,10 @@ func _spawn_enemy_squads() -> void:
 		add_child(sq)
 		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
 		sq.setup(data)
-		_wire_squad(sq)
+		wire_squad(sq)
 		GameState.enemy_squads.append(sq)
 
-func _wire_squad(sq: Squad) -> void:
+func wire_squad(sq: Squad) -> void:
 	sq.squad_collided_with_enemy.connect(_on_squads_collided)
 	sq.squad_arrived.connect(_on_squad_arrived)
 
@@ -141,11 +142,12 @@ func _handle_squad_at_town(squad: Squad, town: TownNode) -> void:
 		town.town_data.town_id, TerrainDefs.Faction.NEUTRAL)
 
 	if town_faction == squad.faction:
-		# Friendly: garrison
-		squad.garrison_at(town)
-		town.set_garrison(squad)
+		# Friendly town: only player squads garrison (AI squads keep moving)
+		if squad.faction == TerrainDefs.Faction.PLAYER:
+			squad.garrison_at(town)
+			town.set_garrison(squad)
 	elif town.garrisoned_squad != null and town.garrisoned_squad.faction != squad.faction:
-		# Occupied by enemy: trigger battle (TODO M7 — for now just begin capture after fight)
+		# Enemy garrison present: trigger battle
 		_on_squads_collided(squad, town.garrisoned_squad)
 	else:
 		# Neutral or undefended enemy: begin capture
@@ -162,7 +164,7 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 	add_child(sq)
 	sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 1.5)
 	sq.setup(squad_data)
-	_wire_squad(sq)
+	wire_squad(sq)
 	GameState.player_squads.append(sq)
 
 # ── Retreat Helper ────────────────────────────────────────────────────────────
