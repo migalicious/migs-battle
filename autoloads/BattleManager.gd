@@ -43,6 +43,8 @@ func _on_battle_completed(scene: BattleAnimator) -> void:
 	GameState.current_phase = GameState.Phase.OVERWORLD
 	_in_battle = false
 	battle_ended.emit(_current_result)
+	# Check win conditions now that phase is OVERWORLD (trigger_end will re-pause if needed)
+	GameState.check_win_conditions()
 
 # ── Result Application ────────────────────────────────────────────────────────
 
@@ -106,7 +108,6 @@ func _handle_loser(squad: Squad) -> void:
 	else:
 		squad.queue_free()
 
-	GameState.check_win_conditions()
 
 func _find_nearest_friendly_town(squad: Squad) -> TownNode:
 	var map_mgr := _get_map_manager()

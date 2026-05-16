@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://victoryscreen"]
+
+[ext_resource type="Script" path="res://scripts/ui/VictoryScreen.gd" id="1_vsscript"]
+
+[node name="VictoryScreen" type="CanvasLayer"]
+layer = 20
+script = ExtResource("1_vsscript")
