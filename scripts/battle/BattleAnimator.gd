@@ -224,14 +224,35 @@ func _grey_out_slot(box: ColorRect) -> void:
 		tween2.tween_property(parent, "modulate:a", 0.45, 0.3)
 
 func _show_result() -> void:
+	var winner_text: String
 	if _result.attacker_wiped and _result.defender_wiped:
-		_banner_lbl.text = "Draw — both sides broken!"
+		winner_text = "Draw — both sides broken!"
 	elif _result.defender_wiped:
-		_banner_lbl.text = "Attacker wins!"
+		winner_text = "Attacker wins!"
 	elif _result.attacker_wiped:
-		_banner_lbl.text = "Defender wins!"
+		winner_text = "Defender wins!"
 	else:
-		_banner_lbl.text = "Both sides survive."
+		winner_text = "Both sides survive."
+
+	# Count surviving player-side units to compute per-unit XP
+	var player_xp: int = 0
+	var player_survivors: int = 0
+	if _attacker.faction == TerrainDefs.Faction.PLAYER:
+		for u in _result.attacker_unit_states:
+			if u.is_alive:
+				player_survivors += 1
+		if player_survivors > 0:
+			player_xp = int(float(_result.attacker_xp) / float(player_survivors))
+	elif _defender.faction == TerrainDefs.Faction.PLAYER:
+		for u in _result.defender_unit_states:
+			if u.is_alive:
+				player_survivors += 1
+		if player_survivors > 0:
+			player_xp = int(float(_result.defender_xp) / float(player_survivors))
+
+	_banner_lbl.text = winner_text
+	if player_xp > 0:
+		_banner_lbl.text += "\nXP: +%d per unit" % player_xp
 	_banner_lbl.visible = true
 	_continue_btn.visible = true
 

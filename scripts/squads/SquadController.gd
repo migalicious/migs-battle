@@ -23,6 +23,7 @@ func _init_refs() -> void:
 		if hud.has_node("TownMenu"):
 			_town_menu = hud.get_node("TownMenu") as TownMenu
 			_town_menu.deploy_requested.connect(_on_deploy_requested)
+			_town_menu.ungarrison_requested.connect(_on_ungarrison_requested)
 	_connect_town_signals()
 	_spawn_squads()
 
@@ -124,9 +125,13 @@ func _connect_town_signals() -> void:
 		town.town_selected.connect(_on_town_selected.bind(town))
 
 func _on_town_selected(town: TownNode) -> void:
+	if not _town_menu:
+		return
 	var town_faction: int = GameState.town_ownership.get(town.town_data.town_id, TerrainDefs.Faction.NEUTRAL)
-	if town_faction == TerrainDefs.Faction.PLAYER and _town_menu:
+	if town_faction == TerrainDefs.Faction.PLAYER:
 		_town_menu.open(town, GameState.reserve_squads)
+	else:
+		_town_menu.open_info(town)
 
 # ── Squad Arrival at Towns ────────────────────────────────────────────────────
 
@@ -166,6 +171,14 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 	sq.setup(squad_data)
 	wire_squad(sq)
 	GameState.player_squads.append(sq)
+
+# ── Ungarrison ────────────────────────────────────────────────────────────────
+
+func _on_ungarrison_requested(town: TownNode) -> void:
+	if town.garrisoned_squad:
+		var sq := town.garrisoned_squad
+		town.clear_garrison()
+		sq.ungarrison()
 
 # ── Retreat Helper ────────────────────────────────────────────────────────────
 

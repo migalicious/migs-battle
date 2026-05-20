@@ -37,11 +37,22 @@ func _build_ui() -> void:
 	_sub_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_sub_label)
 
-	var btn := Button.new()
-	btn.text = "Play Again"
-	btn.custom_minimum_size = Vector2(160.0, 44.0)
-	btn.pressed.connect(_on_play_again_pressed)
-	vbox.add_child(btn)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_row)
+
+	var play_btn := Button.new()
+	play_btn.text = "Play Again"
+	play_btn.custom_minimum_size = Vector2(140.0, 44.0)
+	play_btn.pressed.connect(_on_play_again_pressed)
+	btn_row.add_child(play_btn)
+
+	var quit_btn := Button.new()
+	quit_btn.text = "Quit"
+	quit_btn.custom_minimum_size = Vector2(100.0, 44.0)
+	quit_btn.pressed.connect(func(): get_tree().quit())
+	btn_row.add_child(quit_btn)
 
 func _on_faction_won(winning_faction: int) -> void:
 	if winning_faction == TerrainDefs.Faction.PLAYER:

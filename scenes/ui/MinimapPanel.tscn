@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3 uid="uid://minimappanel"]
+
+[ext_resource type="Script" path="res://scripts/ui/MinimapPanel.gd" id="1_mm"]
+
+[node name="MinimapPanel" type="Control"]
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = -208.0
+offset_right = -8.0
+offset_top = -208.0
+offset_bottom = -8.0
+script = ExtResource("1_mm")
