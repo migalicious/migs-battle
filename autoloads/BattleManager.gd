@@ -26,6 +26,7 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 	GameState.current_phase = GameState.Phase.IN_BATTLE
 
 	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data)
+	_precompute_level_ups(_current_result)
 	battle_started.emit(sq_a.squad_data, sq_b.squad_data)
 
 	get_tree().paused = true
@@ -123,6 +124,42 @@ func _find_nearest_friendly_town(squad: Squad) -> TownNode:
 				nearest_dist = dist
 				nearest = town
 	return nearest
+
+func _precompute_level_ups(result: BattleResult) -> void:
+	_precompute_side(result.attacker_unit_states, result.attacker_xp, result)
+	_precompute_side(result.defender_unit_states, result.defender_xp, result)
+
+func _precompute_side(unit_states: Array[UnitData], total_xp: int, result: BattleResult) -> void:
+	var alive: Array[UnitData] = []
+	for u in unit_states:
+		if u.is_alive:
+			alive.append(u)
+	if alive.is_empty() or total_xp <= 0:
+		return
+	var xp_each := int(float(total_xp) / float(alive.size()))
+	for unit in alive:
+		var sim_xp := unit.xp + xp_each
+		var sim_level := unit.level
+		var sim_class := unit.class_id
+		var sim_xp_to_next := unit.xp_to_next
+		while sim_xp >= sim_xp_to_next:
+			sim_xp -= sim_xp_to_next
+			sim_level += 1
+			sim_xp_to_next = 100 * sim_level
+			var promo := _sim_check_promotion(sim_class, sim_level)
+			var event := {"unit_name": unit.unit_name, "new_level": sim_level, "promoted_to": promo}
+			result.level_up_events.append(event)
+			if promo != "":
+				sim_class = promo
+
+func _sim_check_promotion(class_id: String, level: int) -> String:
+	var cls: ClassDefinition = UnitRegistry.get_class_def(class_id) as ClassDefinition
+	if not cls:
+		return ""
+	for promo in cls.promotions:
+		if level >= promo.required_level:
+			return promo.target_class_id
+	return ""
 
 func _get_map_manager() -> MapManager:
 	return get_tree().current_scene.get_node_or_null("MapManager") as MapManager

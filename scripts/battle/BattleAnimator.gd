@@ -250,9 +250,18 @@ func _show_result() -> void:
 		if player_survivors > 0:
 			player_xp = int(float(_result.defender_xp) / float(player_survivors))
 
-	_banner_lbl.text = winner_text
+	var banner := winner_text
 	if player_xp > 0:
-		_banner_lbl.text += "\nXP: +%d per unit" % player_xp
+		banner += "\nXP: +%d per unit" % player_xp
+	for ev in _result.level_up_events:
+		var unit_name: String = ev["unit_name"]
+		var lvl: int = ev["new_level"]
+		var promo: String = ev["promoted_to"]
+		if promo != "":
+			banner += "\n%s → Level %d! Promoted to %s!" % [unit_name, lvl, promo]
+		else:
+			banner += "\n%s → Level %d!" % [unit_name, lvl]
+	_banner_lbl.text = banner
 	_banner_lbl.visible = true
 	_continue_btn.visible = true
 

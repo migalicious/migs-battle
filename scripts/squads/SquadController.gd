@@ -52,20 +52,8 @@ func _spawn_player_squads() -> void:
 	var data1 := _build_player_squad(1)
 	GameState.reserve_squads.append(data1)
 
-func _spawn_enemy_squads() -> void:
-	var enemy_towns := _map_manager.get_towns_by_faction(TerrainDefs.Faction.ENEMY)
-	var count := mini(4, enemy_towns.size())
-	for i in range(count):
-		var town: TownNode = enemy_towns[i]
-		var data := _build_enemy_squad(i)
-		var sq: Squad = _SQUAD_SCENE.instantiate()
-		add_child(sq)
-		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
-		sq.setup(data)
-		wire_squad(sq)
-		GameState.enemy_squads.append(sq)
-
 func wire_squad(sq: Squad) -> void:
+	sq.map_manager = _map_manager
 	sq.squad_collided_with_enemy.connect(_on_squads_collided)
 	sq.squad_arrived.connect(_on_squad_arrived)
 
@@ -89,23 +77,6 @@ func _build_player_squad(idx: int) -> SquadData:
 	_add_unit(data, c1, n1, 0, 1, false, 6)
 	_add_unit(data, "knight", "Aldric", 0, 2, false, 6)
 	_add_unit(data, c2, n2, 1, 0, false, 6)
-	return data
-
-func _build_enemy_squad(idx: int) -> SquadData:
-	var data := SquadData.new()
-	data.squad_id = "enemy_%d" % idx
-	data.faction = TerrainDefs.Faction.ENEMY
-
-	var c0: String; var c1: String
-	var n0: String; var n1: String
-	match idx % 4:
-		0: c0 = "knight";  c1 = "fighter"; n0 = "Dread Knight"; n1 = "Soldier"
-		1: c0 = "archer";  c1 = "mage";    n0 = "Dark Archer";  n1 = "Shadow"
-		2: c0 = "fighter"; c1 = "archer";  n0 = "Grunt";        n1 = "Minion"
-		_: c0 = "cavalry"; c1 = "fighter"; n0 = "Scout";        n1 = "Runner"
-
-	_add_unit(data, c0, n0, 0, 0, true)
-	_add_unit(data, c1, n1, 1, 0, false)
 	return data
 
 func _add_unit(data: SquadData, class_id: String, unit_name: String, row: int, col: int, is_leader: bool, level: int = 1) -> void:
@@ -247,11 +218,25 @@ func _handle_right_click(screen_pos: Vector2) -> void:
 	var world_pos: Vector3 = hit["position"]
 	var grid := _map_manager.world_to_grid(world_pos)
 	var terrain := _map_manager.get_terrain(grid.x, grid.y)
-	var spd := TerrainDefs.get_speed(_selected_squad.squad_data.movement_type, terrain)
+	var spd := TerrainDefs.get_speed(_selected_squad.squad_data.get_movement_type(), terrain)
 	if spd == 0.0:
-		return  # impassable; TODO M10: show "can't go there" indicator
+		_show_cant_go_there(world_pos)
+		return
 	var dest := _map_manager.grid_to_world(grid)
 	_selected_squad.set_destination(dest)
+
+func _show_cant_go_there(world_pos: Vector3) -> void:
+	var lbl := Label3D.new()
+	lbl.text = "Can't go there!"
+	lbl.pixel_size = 0.025
+	lbl.font_size = 16
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.modulate = Color(1.0, 0.35, 0.35)
+	lbl.global_position = Vector3(world_pos.x, 1.0, world_pos.z)
+	add_child(lbl)
+	var tween := create_tween()
+	tween.tween_property(lbl, "modulate:a", 0.0, 0.7)
+	tween.tween_callback(lbl.queue_free)
 
 func _raycast_at(screen_pos: Vector2, mask: int) -> Dictionary:
 	if not _camera:

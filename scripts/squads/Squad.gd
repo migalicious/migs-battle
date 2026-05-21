@@ -3,11 +3,11 @@ extends CharacterBody3D
 
 signal squad_selected(squad: Squad)
 signal squad_arrived(squad: Squad, destination: Vector3)
-signal squad_entered_town(squad: Squad, town: TownNode)
 signal squad_collided_with_enemy(squad_a: Squad, squad_b: Squad)
 
 var squad_data: SquadData = null
 var faction: int = 0
+var map_manager: MapManager = null  # set by SquadController after wire_squad
 
 # Set by SquadController to prevent double-battle triggers
 var in_battle: bool = false
@@ -27,6 +27,7 @@ var _is_selected: bool = false
 var _is_moving: bool = false
 var _destination: Vector3 = Vector3.ZERO
 var _is_flying: bool = false
+var _path_line: MeshInstance3D = null
 
 func _ready() -> void:
 	# Capsule body mesh
@@ -74,6 +75,16 @@ func _ready() -> void:
 	_nav_agent.path_desired_distance = 0.5
 	_nav_agent.target_desired_distance = 0.5
 
+	# Path line — thin box from squad to destination, shown while moving
+	_path_line = MeshInstance3D.new()
+	_path_line.mesh = BoxMesh.new()
+	var line_mat := StandardMaterial3D.new()
+	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_path_line.set_surface_override_material(0, line_mat)
+	_path_line.visible = false
+	add_child(_path_line)
+
 func setup(data: SquadData) -> void:
 	squad_data = data
 	faction = data.faction
@@ -83,6 +94,16 @@ func setup(data: SquadData) -> void:
 	mat.albedo_color = _faction_color(faction)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mesh_inst.set_surface_override_material(0, mat)
+
+	# Path line: lightened faction color
+	var line_mat := _path_line.get_surface_override_material(0) as StandardMaterial3D
+	if line_mat:
+		var fc := _faction_color(faction)
+		line_mat.albedo_color = Color(
+			minf(fc.r * 0.6 + 0.4, 1.0),
+			minf(fc.g * 0.6 + 0.4, 1.0),
+			minf(fc.b * 0.6 + 0.4, 1.0),
+			0.65)
 
 	# Determine flying movement from leader class
 	var leader := data.get_leader()
@@ -101,6 +122,10 @@ func _update_label() -> void:
 		return
 	var leader := squad_data.get_leader()
 	_label.text = leader.unit_name if leader else "???"
+
+func _process(_delta: float) -> void:
+	if _is_moving and _path_line:
+		_update_path_line()
 
 func _physics_process(_delta: float) -> void:
 	if is_garrisoned:
@@ -135,7 +160,24 @@ func _physics_process(_delta: float) -> void:
 func _stop_moving() -> void:
 	_is_moving = false
 	velocity = Vector3.ZERO
+	if _path_line:
+		_path_line.visible = false
 	squad_arrived.emit(self, _destination)
+
+func _update_path_line() -> void:
+	var start := Vector3(global_position.x, 0.08, global_position.z)
+	var end   := Vector3(_destination.x,    0.08, _destination.z)
+	var diff  := end - start
+	var length := diff.length()
+	if length < 0.2:
+		_path_line.visible = false
+		return
+	_path_line.visible = true
+	var box := _path_line.mesh as BoxMesh
+	box.size = Vector3(0.15, 0.05, length)
+	_path_line.global_position = (start + end) * 0.5
+	var dir := diff / length
+	_path_line.global_basis = Basis.looking_at(dir, Vector3.UP)
 
 func set_destination(world_pos: Vector3) -> void:
 	_destination = Vector3(world_pos.x, global_position.y, world_pos.z)
@@ -160,6 +202,8 @@ func garrison_at(town: TownNode) -> void:
 	garrison_town = town
 	_is_moving = false
 	velocity = Vector3.ZERO
+	if _path_line:
+		_path_line.visible = false
 
 func ungarrison() -> void:
 	is_garrisoned = false
@@ -170,15 +214,19 @@ func retreat_to(world_pos: Vector3) -> void:
 	_is_moving = false
 	is_garrisoned = false
 	garrison_town = null
+	if _path_line:
+		_path_line.visible = false
 
 func _update_terrain_speed() -> void:
-	if not squad_data:
+	if not squad_data or not map_manager:
 		return
-	# TODO: get terrain from MapManager at current position (M6 refinement)
+	var grid := map_manager.world_to_grid(global_position)
+	var terrain := map_manager.get_terrain(grid.x, grid.y)
+	squad_data.recalculate_speed(terrain)
 
 func _faction_color(f: int) -> Color:
 	if f == TerrainDefs.Faction.PLAYER:
-		return Color(1.0, 0.0, 1.0)
+		return Color(0.20, 0.40, 0.90)
 	if f == TerrainDefs.Faction.ENEMY:
 		return Color(1.0, 0.2, 0.2)
 	return Color.WHITE

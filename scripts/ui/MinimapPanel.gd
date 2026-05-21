@@ -5,6 +5,7 @@ const MM_SIZE: int = 200
 
 var _map_mgr: MapManager = null
 var _camera: Camera3D = null
+var _terrain_texture: ImageTexture = null
 
 
 func _ready() -> void:
@@ -17,6 +18,18 @@ func _setup_refs() -> void:
 		return
 	_map_mgr = main.get_node_or_null("MapManager") as MapManager
 	_camera  = main.get_node_or_null("Camera") as Camera3D
+	if _map_mgr:
+		_bake_terrain_texture()
+
+func _bake_terrain_texture() -> void:
+	var W: int = _map_mgr.map_width
+	var H: int = _map_mgr.map_height
+	var img := Image.create(W, H, false, Image.FORMAT_RGB8)
+	for x in range(W):
+		for z in range(H):
+			var t: TerrainDefs.TerrainType = _map_mgr.get_terrain(x, z)
+			img.set_pixel(x, z, _terrain_color(t))
+	_terrain_texture = ImageTexture.create_from_image(img)
 
 func _process(_delta: float) -> void:
 	queue_redraw()
@@ -26,15 +39,12 @@ func _draw() -> void:
 	if not _map_mgr:
 		return
 
+	if _terrain_texture:
+		draw_texture_rect(_terrain_texture, Rect2(0, 0, MM_SIZE, MM_SIZE), false)
+
 	var W: int = _map_mgr.map_width
 	var H: int = _map_mgr.map_height
 	var cell_px: float = float(MM_SIZE) / float(maxi(W, H))
-
-	# Terrain cells
-	for x in range(W):
-		for z in range(H):
-			var t: TerrainDefs.TerrainType = _map_mgr.get_terrain(x, z)
-			draw_rect(Rect2(x * cell_px, z * cell_px, cell_px + 0.5, cell_px + 0.5), _terrain_color(t))
 
 	# Towns as colored dots
 	for town in _map_mgr.get_towns():
@@ -46,7 +56,7 @@ func _draw() -> void:
 	for sq in GameState.player_squads:
 		if not is_instance_valid(sq):
 			continue
-		draw_circle(_world_to_mm(sq.global_position, W, H), 3.5, Color(0.25, 0.55, 1.0))
+		draw_circle(_world_to_mm(sq.global_position, W, H), 3.5, Color(0.20, 0.40, 0.90))
 
 	# Enemy squads
 	for sq in GameState.enemy_squads:
@@ -85,6 +95,6 @@ func _terrain_color(t: TerrainDefs.TerrainType) -> Color:
 
 func _faction_color(f: int) -> Color:
 	match f:
-		TerrainDefs.Faction.PLAYER: return Color(0.25, 0.55, 1.0)
+		TerrainDefs.Faction.PLAYER: return Color(0.20, 0.40, 0.90)
 		TerrainDefs.Faction.ENEMY:  return Color(1.0, 0.30, 0.30)
 		_: return Color(0.70, 0.70, 0.70)

@@ -14,3 +14,5 @@ extends Resource
 @export var defender_wiped: bool = false
 
 @export var action_log: Array[BattleAction] = []
+
+var level_up_events: Array[Dictionary] = []

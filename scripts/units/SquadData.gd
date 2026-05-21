@@ -6,7 +6,6 @@ extends Resource
 @export var units: Array[UnitData] = []
 
 var move_speed: float = 0.0
-var movement_type: TerrainDefs.MovementType = TerrainDefs.MovementType.INFANTRY
 
 func get_unit_at(row: int, col: int) -> UnitData:
 	for u in units:
@@ -27,6 +26,13 @@ func get_alive_units() -> Array[UnitData]:
 			result.append(u)
 	return result
 
+func get_movement_type() -> TerrainDefs.MovementType:
+	var leader := get_leader()
+	if not leader:
+		return TerrainDefs.MovementType.INFANTRY
+	var cls: ClassDefinition = UnitRegistry.get_class_def(leader.class_id) as ClassDefinition
+	return cls.movement_type if cls else TerrainDefs.MovementType.INFANTRY
+
 func recalculate_speed(terrain: TerrainDefs.TerrainType) -> void:
 	var leader := get_leader()
 	if not leader:
@@ -37,8 +43,8 @@ func recalculate_speed(terrain: TerrainDefs.TerrainType) -> void:
 		move_speed = 0.0
 		return
 
-	movement_type = leader_cls.movement_type
-	var multiplier := TerrainDefs.get_speed(movement_type, terrain)
+	var mv_type := leader_cls.movement_type
+	var multiplier := TerrainDefs.get_speed(mv_type, terrain)
 	if multiplier == 0.0:
 		move_speed = 0.0
 		return

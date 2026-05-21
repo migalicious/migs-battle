@@ -196,7 +196,7 @@ func show_squad(data: SquadData) -> void:
 		_populate_slot(_slots[sq_col],     data.get_unit_at(0, sq_col))
 		_populate_slot(_slots[3 + sq_col], data.get_unit_at(1, sq_col))
 
-	var mt_idx: int = int(data.movement_type)
+	var mt_idx: int = int(data.get_movement_type())
 	_movement_lbl.text = "Movement: " + (MOVEMENT_NAMES[mt_idx] if mt_idx < MOVEMENT_NAMES.size() else "???")
 	_speed_lbl.text = "Speed: %.1f u/s" % data.move_speed
 
