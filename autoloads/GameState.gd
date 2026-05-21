@@ -14,6 +14,8 @@ var reserve_squads: Array = []
 # Which win conditions are active this run
 var active_conditions: Array[String] = ["hq_capture"]
 
+var pending_map_params: MapParams = null
+
 func _ready() -> void:
 	pass
 
@@ -78,6 +80,8 @@ func reset() -> void:
 	player_squads = []
 	enemy_squads = []
 	reserve_squads = []
+	active_conditions = ["hq_capture"]
+	pending_map_params = null
 
 func _get_map_manager() -> MapManager:
 	var scene := get_tree().current_scene

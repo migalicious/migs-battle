@@ -3,6 +3,7 @@ extends CanvasLayer
 
 var _result_label: Label = null
 var _sub_label: Label = null
+var _seed_label: Label = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -37,6 +38,18 @@ func _build_ui() -> void:
 	_sub_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(_sub_label)
 
+	_seed_label = Label.new()
+	_seed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_seed_label.add_theme_font_size_override("font_size", 14)
+	_seed_label.modulate = Color(0.75, 0.75, 0.75)
+	vbox.add_child(_seed_label)
+
+	var copy_btn := Button.new()
+	copy_btn.text = "Copy Seed"
+	copy_btn.custom_minimum_size = Vector2(120.0, 36.0)
+	copy_btn.pressed.connect(func() -> void: DisplayServer.clipboard_set(str(GameState.map_seed)))
+	vbox.add_child(copy_btn)
+
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 16)
@@ -63,6 +76,8 @@ func _on_faction_won(winning_faction: int) -> void:
 		_result_label.text = "DEFEAT"
 		_result_label.modulate = Color(1.0, 0.3, 0.3)
 		_sub_label.text = "Your stronghold has been captured."
+	if _seed_label:
+		_seed_label.text = "Map Seed: %d" % GameState.map_seed
 	visible = true
 
 func _on_play_again_pressed() -> void:

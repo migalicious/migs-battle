@@ -18,13 +18,17 @@ const _CELL_SCENE := preload("res://scenes/map/MapCell.tscn")
 const _TOWN_SCENE := preload("res://scenes/map/TownNode.tscn")
 
 func _ready() -> void:
-	_params = MapParams.new()
-	_params.width        = map_width
-	_params.height       = map_height
-	_params.cell_size    = cell_size
-	_params.map_seed     = map_seed
-	_params.num_towns    = num_towns
-	_params.num_castles  = num_castles
+	if GameState.pending_map_params:
+		_params = GameState.pending_map_params
+		GameState.pending_map_params = null
+	else:
+		_params = MapParams.new()
+		_params.width        = map_width
+		_params.height       = map_height
+		_params.cell_size    = cell_size
+		_params.map_seed     = map_seed
+		_params.num_towns    = num_towns
+		_params.num_castles  = num_castles
 
 	var cells_node := Node3D.new()
 	cells_node.name = "MapCells"
@@ -37,6 +41,11 @@ func _ready() -> void:
 	var result := MapGenerator.generate(_params)
 	_terrain_grid = result["terrain"]
 	GameState.map_seed = result["seed"]
+
+	# Persist actual seed so MapConfigScreen can offer replay
+	var seed_cfg := ConfigFile.new()
+	seed_cfg.set_value("map", "last_seed", GameState.map_seed)
+	seed_cfg.save("user://map_config.cfg")
 
 	_init_cell_array()
 	_spawn_cells(cells_node)
