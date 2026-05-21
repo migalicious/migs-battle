@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://unitdetailpopup"]
+[gd_scene format=3 uid="uid://cfodm2ehqlkvj"]
 
 [ext_resource type="Script" path="res://scripts/ui/UnitDetailPopup.gd" id="1_udp"]
 

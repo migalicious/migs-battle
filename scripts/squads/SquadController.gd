@@ -85,9 +85,10 @@ func _build_player_squad(idx: int) -> SquadData:
 		c0 = "knight"; c1 = "fighter"; c2 = "archer"
 		n0 = "Gawain"; n1 = "Bors"; n2 = "Tristan"
 
-	_add_unit(data, c0, n0, 0, 0, true)
-	_add_unit(data, c1, n1, 0, 1, false)
-	_add_unit(data, c2, n2, 1, 0, false)
+	_add_unit(data, c0, n0, 0, 0, true, 8)
+	_add_unit(data, c1, n1, 0, 1, false, 6)
+	_add_unit(data, "knight", "Aldric", 0, 2, false, 6)
+	_add_unit(data, c2, n2, 1, 0, false, 6)
 	return data
 
 func _build_enemy_squad(idx: int) -> SquadData:
@@ -107,8 +108,8 @@ func _build_enemy_squad(idx: int) -> SquadData:
 	_add_unit(data, c1, n1, 1, 0, false)
 	return data
 
-func _add_unit(data: SquadData, class_id: String, unit_name: String, row: int, col: int, is_leader: bool) -> void:
-	var unit := UnitRegistry.create_unit(class_id, 1)
+func _add_unit(data: SquadData, class_id: String, unit_name: String, row: int, col: int, is_leader: bool, level: int = 1) -> void:
+	var unit := UnitRegistry.create_unit(class_id, level)
 	if not unit:
 		return
 	unit.unit_name = unit_name
@@ -136,9 +137,11 @@ func _on_town_selected(town: TownNode) -> void:
 # ── Squad Arrival at Towns ────────────────────────────────────────────────────
 
 func _on_squad_arrived(squad: Squad, pos: Vector3) -> void:
-	var arrival_grid := _map_manager.world_to_grid(pos)
+	var threshold: float = _map_manager.cell_size * 0.75
 	for town in _map_manager.get_towns():
-		if town.town_data.grid_x == arrival_grid.x and town.town_data.grid_z == arrival_grid.y:
+		var dx := pos.x - town.global_position.x
+		var dz := pos.z - town.global_position.z
+		if dx * dx + dz * dz < threshold * threshold:
 			_handle_squad_at_town(squad, town)
 			return
 
@@ -151,7 +154,7 @@ func _handle_squad_at_town(squad: Squad, town: TownNode) -> void:
 		if squad.faction == TerrainDefs.Faction.PLAYER:
 			squad.garrison_at(town)
 			town.set_garrison(squad)
-	elif town.garrisoned_squad != null and town.garrisoned_squad.faction != squad.faction:
+	elif is_instance_valid(town.garrisoned_squad) and town.garrisoned_squad.faction != squad.faction:
 		# Enemy garrison present: trigger battle
 		_on_squads_collided(squad, town.garrisoned_squad)
 	else:

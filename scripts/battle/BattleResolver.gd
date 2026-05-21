@@ -23,10 +23,16 @@ static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 	result.attacker_wiped = _all_dead(atk_units) or _leader_dead(atk_units)
 	result.defender_wiped = _all_dead(def_units) or _leader_dead(def_units)
 
-	var atk_kills := _count_dead(def_units)
-	var def_kills := _count_dead(atk_units)
-	result.attacker_xp = atk_kills * 30 + 10 + (20 if result.defender_wiped else 0)
-	result.defender_xp = def_kills * 30 + 10 + (20 if result.attacker_wiped else 0)
+	var atk_avg_level := _avg_level(atk_units)
+	var def_avg_level := _avg_level(def_units)
+	var atk_alive := _count_alive(atk_units)
+	var def_alive := _count_alive(def_units)
+
+	# §04: winner gets 10 + (enemy_avg_level * 3) per unit; loser gets 5 + (enemy_avg_level * 1) per unit
+	var atk_per := (10 + int(def_avg_level * 3)) if not result.attacker_wiped else (5 + int(def_avg_level * 1))
+	var def_per := (10 + int(atk_avg_level * 3)) if not result.defender_wiped else (5 + int(atk_avg_level * 1))
+	result.attacker_xp = atk_per * maxi(atk_alive, 1)
+	result.defender_xp = def_per * maxi(def_alive, 1)
 
 	return result
 
@@ -54,6 +60,21 @@ static func _count_dead(units: Array[UnitData]) -> int:
 		if not u.is_alive:
 			count += 1
 	return count
+
+static func _count_alive(units: Array[UnitData]) -> int:
+	var count := 0
+	for u in units:
+		if u.is_alive:
+			count += 1
+	return count
+
+static func _avg_level(units: Array[UnitData]) -> float:
+	if units.is_empty():
+		return 1.0
+	var total := 0
+	for u in units:
+		total += u.level
+	return float(total) / float(units.size())
 
 static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData], battle_log: Array[BattleAction]) -> void:
 	# Initiative queue sorted by agility descending

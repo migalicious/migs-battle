@@ -22,8 +22,8 @@ script = ExtResource("3_sqctrl")
 script = ExtResource("6_ai")
 
 [node name="Camera" type="Camera3D" parent="."]
-position = Vector3(0, 28, 14)
-rotation = Vector3(-1.1, 0, 0)
+position = Vector3(0, 35, 40)
+rotation = Vector3(-1.0, 0, 0)
 script = ExtResource("2_cam")
 
 [node name="HUD" type="CanvasLayer" parent="."]

@@ -4,7 +4,7 @@ extends StaticBody3D
 signal town_captured(town: TownNode, new_faction: int)
 signal town_selected(town: TownNode)
 
-const TICK_INTERVAL: float = 5.0
+const TICK_INTERVAL: float = 3.0
 
 var town_data: TownData
 var faction: int = TerrainDefs.Faction.NEUTRAL
@@ -35,7 +35,8 @@ func setup(data: TownData, base_y: float) -> void:
 	_add_select_area()
 
 func _process(delta: float) -> void:
-	if not town_data or occupying_squad == null:
+	if not town_data or not is_instance_valid(occupying_squad):
+		occupying_squad = null
 		return
 	if occupying_squad.faction == faction:
 		return  # friendly garrison — not capturing
@@ -75,7 +76,7 @@ func set_garrison(squad: Squad) -> void:
 		_garrison_indicator.visible = true
 
 func clear_garrison() -> void:
-	if garrisoned_squad == occupying_squad:
+	if not is_instance_valid(garrisoned_squad) or garrisoned_squad == occupying_squad:
 		occupying_squad = null
 	garrisoned_squad = null
 	if _garrison_indicator:

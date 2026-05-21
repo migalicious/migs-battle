@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://victoryscreen"]
+[gd_scene format=3 uid="uid://b6bhqiejiq0lt"]
 
 [ext_resource type="Script" path="res://scripts/ui/VictoryScreen.gd" id="1_vsscript"]
 

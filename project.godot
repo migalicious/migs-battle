@@ -11,9 +11,16 @@ config_version=5
 [application]
 
 config/name="migs-battle"
+run/main_scene="res://scenes/ui/TitleScreen.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
-config/main_scene="res://scenes/main/Main.tscn"
+config/main_scene="res://scenes/ui/TitleScreen.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=2
 
 [autoload]
 

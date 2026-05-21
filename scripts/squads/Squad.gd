@@ -78,9 +78,10 @@ func setup(data: SquadData) -> void:
 	squad_data = data
 	faction = data.faction
 
-	# Faction-colored body material
+	# Faction-colored body material — unshaded so the color isn't darkened by scene lighting
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = _faction_color(faction)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mesh_inst.set_surface_override_material(0, mat)
 
 	# Determine flying movement from leader class
@@ -177,7 +178,7 @@ func _update_terrain_speed() -> void:
 
 func _faction_color(f: int) -> Color:
 	if f == TerrainDefs.Faction.PLAYER:
-		return Color(0.2, 0.4, 1.0)
+		return Color(1.0, 0.0, 1.0)
 	if f == TerrainDefs.Faction.ENEMY:
 		return Color(1.0, 0.2, 0.2)
 	return Color.WHITE

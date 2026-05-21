@@ -12,7 +12,7 @@ var enemy_squads: Array = []
 var reserve_squads: Array = []
 
 # Which win conditions are active this run
-var active_conditions: Array[String] = ["hq_capture", "all_strongholds"]
+var active_conditions: Array[String] = ["hq_capture"]
 
 func _ready() -> void:
 	pass

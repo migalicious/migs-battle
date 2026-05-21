@@ -84,7 +84,8 @@ func _grant_xp(data: SquadData, total_xp: int) -> void:
 			print("[BattleManager] Level up: %s → level %d" % [unit.unit_name, unit.level])
 			var promo := LevelSystem.check_promotion(unit)
 			if promo != "":
-				print("[BattleManager] %s eligible to promote → %s" % [unit.unit_name, promo])
+				LevelSystem.apply_promotion(unit, promo)
+				print("[BattleManager] %s promoted → %s" % [unit.unit_name, promo])
 
 func _handle_loser(squad: Squad) -> void:
 	GameState.player_squads.erase(squad)

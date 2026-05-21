@@ -160,6 +160,6 @@ func get_towns_by_faction(faction: int) -> Array[TownNode]:
 
 func get_hq(faction: int) -> TownNode:
 	for t in _towns:
-		if t.town_data and t.town_data.town_type == TerrainDefs.TownType.HQ and t.faction == faction:
+		if t.town_data and t.town_data.town_type == TerrainDefs.TownType.HQ and t.town_data.starting_faction == faction:
 			return t
 	return null
