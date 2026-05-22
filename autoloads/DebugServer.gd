@@ -73,8 +73,11 @@ func _handle(raw: String) -> void:
 			var text := str(d.get("text", ""))
 			var btn := _find_button(get_tree().current_scene, text)
 			if btn:
-				btn.emit_signal("pressed")
-				_send({"ok": true})
+				if btn.disabled:
+					_send({"error": "button is disabled: %s" % text})
+				else:
+					btn.emit_signal("pressed")
+					_send({"ok": true})
 			else:
 				_send({"error": "button not found: %s" % text})
 		"set_option":

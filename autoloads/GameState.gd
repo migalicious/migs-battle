@@ -15,6 +15,7 @@ var reserve_squads: Array = []
 var active_conditions: Array[String] = ["hq_capture"]
 
 var pending_map_params: MapParams = null
+var configured_squads: Array[SquadData] = []
 
 func _ready() -> void:
 	pass
@@ -82,6 +83,7 @@ func reset() -> void:
 	reserve_squads = []
 	active_conditions = ["hq_capture"]
 	pending_map_params = null
+	configured_squads = []
 
 func _get_map_manager() -> MapManager:
 	var scene := get_tree().current_scene

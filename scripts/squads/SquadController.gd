@@ -39,18 +39,22 @@ func _spawn_player_squads() -> void:
 	if hq:
 		base_pos = hq.global_position
 
-	# Spawn squad 0 on the map near the player HQ
-	var data0 := _build_player_squad(0)
-	var sq0: Squad = _SQUAD_SCENE.instantiate()
-	add_child(sq0)
-	sq0.global_position = Vector3(base_pos.x, 0.5, base_pos.z + 2.5)
-	sq0.setup(data0)
-	wire_squad(sq0)
-	GameState.player_squads.append(sq0)
+	var squads := GameState.configured_squads
+	if squads.is_empty():
+		squads = [_build_player_squad(0), _build_player_squad(1)]
 
-	# Put squad 1 in reserve for TownMenu deployment
-	var data1 := _build_player_squad(1)
-	GameState.reserve_squads.append(data1)
+	for i in range(squads.size()):
+		var data: SquadData = squads[i]
+		data.faction = TerrainDefs.Faction.PLAYER
+		if i == 0:
+			var sq: Squad = _SQUAD_SCENE.instantiate()
+			add_child(sq)
+			sq.global_position = Vector3(base_pos.x, 0.5, base_pos.z + 2.5)
+			sq.setup(data)
+			wire_squad(sq)
+			GameState.player_squads.append(sq)
+		else:
+			GameState.reserve_squads.append(data)
 
 func wire_squad(sq: Squad) -> void:
 	sq.map_manager = _map_manager
