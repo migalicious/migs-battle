@@ -61,11 +61,13 @@ func create_unit(class_id: String, level: int) -> UnitData:
 # ---------------------------------------------------------------------------
 
 func _skill(sid: String, dname: String, desc: String, cond: int, eff: int,
-		power: float = 1.0, heal: float = 0.0, dmg_red: float = 0.0) -> Resource:
+		power: float = 1.0, heal: float = 0.0, dmg_red: float = 0.0,
+		stat_tgt: String = "", stat_amt: int = 0) -> Resource:
 	var s := _SkillDef.new()
 	s.skill_id = sid; s.display_name = dname; s.description = desc
 	s.condition = cond as _SkillDef.SkillCondition; s.effect = eff as _SkillDef.SkillEffect
 	s.power = power; s.heal_percent = heal; s.damage_reduction = dmg_red
+	s.stat_target = stat_tgt; s.stat_amount = stat_amt
 	return s
 
 func _atk(aname: String, dtype: TerrainDefs.DamageType, hits: int,
@@ -79,6 +81,11 @@ func _atk(aname: String, dtype: TerrainDefs.DamageType, hits: int,
 	a.targets_row = trow
 	a.hits_all_in_column = all_col
 	a.hits_all_in_row = all_row
+	return a
+
+func _atk_heal(aname: String, dtype: TerrainDefs.DamageType, power: float) -> AttackDefinition:
+	var a := _atk(aname, dtype, 1, power, TerrainDefs.TargetRow.ANY)
+	a.is_heal = true
 	return a
 
 func _promo(target: String, req_level: int) -> PromotionRequirement:
@@ -116,7 +123,7 @@ func _build_default_classes() -> void:
 	fighter.front_attacks = [_atk("Slash", P, 2, 1.0, FR)]
 	fighter.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
 	fighter.skills        = [_skill("grit", "Grit", "When wounded, reduces incoming damage.", 1, 4, 1.0, 0.0, 0.2)]
-	fighter.promotions    = [_promo("knight",5), _promo("archer",4), _promo("mage",4)]
+	fighter.promotions    = [_promo("knight",5), _promo("archer",4), _promo("mage",4), _promo("warrior",6), _promo("witch",4)]
 	_reg(fighter)
 
 	# --- Knight ---
@@ -180,7 +187,7 @@ func _build_default_classes() -> void:
 	mage.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
 	mage.back_attacks  = [_atk("Magic", FIRE, 2, 1.2, FR)]
 	mage.skills        = [_skill("mana_surge", "Mana Surge", "Extra magic attack on the final round.", 4, 5, 1.0)]
-	mage.promotions    = [_promo("sorcerer", 12)]
+	mage.promotions    = [_promo("sorcerer", 12), _promo("cleric", 8)]
 	_reg(mage)
 
 	# --- Sorcerer ---
@@ -230,6 +237,102 @@ func _build_default_classes() -> void:
 	gryphon.skills        = [_skill("swoop", "Swoop", "Bonus strike when the enemy front row is gone.", 6, 0, 0.8)]
 	gryphon.promotions    = []
 	_reg(gryphon)
+
+	# --- Cleric ---
+	var cleric := ClassDefinition.new()
+	cleric.class_id = "cleric"; cleric.display_name = "Cleric"
+	cleric.placeholder_color = Color(1.0, 0.9, 0.6)
+	cleric.base_hp = 18; cleric.base_strength = 3; cleric.base_agility = 5
+	cleric.base_intelligence = 7; cleric.base_defense = 4; cleric.base_resistance = 10
+	cleric.hp_growth = Vector2i(3,5); cleric.str_growth = Vector2i(1,2)
+	cleric.agi_growth = Vector2i(1,2); cleric.int_growth = Vector2i(3,5)
+	cleric.def_growth = Vector2i(1,2); cleric.res_growth = Vector2i(3,4)
+	cleric.movement_type = INF; cleric.base_move_speed = 3.0; cleric.can_lead = true; cleric.deploy_cost = 75
+	cleric.front_attacks = [_atk("Staff", P, 1, 0.5, FR)]
+	cleric.back_attacks  = [_atk_heal("Heal", HOLY, 1.5)]
+	cleric.skills        = [_skill("devoted", "Devoted", "Heals lowest-HP ally each round.", 0, 3, 1.0, 0.12)]
+	cleric.promotions    = []
+	_reg(cleric)
+
+	# --- Warrior ---
+	var warrior := ClassDefinition.new()
+	warrior.class_id = "warrior"; warrior.display_name = "Warrior"
+	warrior.placeholder_color = Color(0.7, 0.2, 0.15)
+	warrior.base_hp = 30; warrior.base_strength = 10; warrior.base_agility = 7
+	warrior.base_intelligence = 2; warrior.base_defense = 7; warrior.base_resistance = 3
+	warrior.hp_growth = Vector2i(5,7); warrior.str_growth = Vector2i(3,5)
+	warrior.agi_growth = Vector2i(2,3); warrior.int_growth = Vector2i(1,2)
+	warrior.def_growth = Vector2i(2,4); warrior.res_growth = Vector2i(1,2)
+	warrior.movement_type = INF; warrior.base_move_speed = 3.0; warrior.can_lead = true; warrior.deploy_cost = 90
+	warrior.front_attacks = [_atk("Heavy Strike", P, 2, 1.4, FR)]
+	warrior.back_attacks  = [_atk("Throw", P, 1, 0.9, ANY)]
+	warrior.skills        = [_skill("berserk", "Berserk", "50% more damage when wounded.", 1, 1, 1.5)]
+	warrior.promotions    = [_promo("berserker", 12)]
+	_reg(warrior)
+
+	# --- Berserker ---
+	var berserker := ClassDefinition.new()
+	berserker.class_id = "berserker"; berserker.display_name = "Berserker"
+	berserker.placeholder_color = Color(0.9, 0.1, 0.1)
+	berserker.base_hp = 40; berserker.base_strength = 14; berserker.base_agility = 9
+	berserker.base_intelligence = 2; berserker.base_defense = 8; berserker.base_resistance = 3
+	berserker.hp_growth = Vector2i(6,8); berserker.str_growth = Vector2i(4,6)
+	berserker.agi_growth = Vector2i(2,4); berserker.int_growth = Vector2i(1,2)
+	berserker.def_growth = Vector2i(2,3); berserker.res_growth = Vector2i(1,2)
+	berserker.movement_type = INF; berserker.base_move_speed = 3.0; berserker.can_lead = true; berserker.deploy_cost = 140
+	berserker.front_attacks = [_atk("Rampage", P, 3, 1.3, FR)]
+	berserker.back_attacks  = [_atk("War Cry", P, 1, 1.0, FR, false, true)]
+	berserker.skills        = [_skill("bloodlust", "Bloodlust", "Restores 5% HP after each attack.", 0, 2, 1.0, 0.05)]
+	berserker.promotions    = []
+	_reg(berserker)
+
+	# --- Witch ---
+	var witch := ClassDefinition.new()
+	witch.class_id = "witch"; witch.display_name = "Witch"
+	witch.placeholder_color = Color(0.5, 0.0, 0.6)
+	witch.base_hp = 15; witch.base_strength = 3; witch.base_agility = 6
+	witch.base_intelligence = 10; witch.base_defense = 3; witch.base_resistance = 9
+	witch.hp_growth = Vector2i(2,4); witch.str_growth = Vector2i(1,2)
+	witch.agi_growth = Vector2i(2,3); witch.int_growth = Vector2i(4,6)
+	witch.def_growth = Vector2i(1,2); witch.res_growth = Vector2i(3,4)
+	witch.movement_type = INF; witch.base_move_speed = 3.0; witch.can_lead = true; witch.deploy_cost = 70
+	witch.front_attacks = [_atk("Hex", DARK, 1, 0.7, FR)]
+	witch.back_attacks  = [_atk("Curse Bolt", DARK, 2, 1.1, ANY)]
+	witch.skills        = [_skill("weaken", "Weaken", "Lowers enemy defense after each hit.", 0, 7, 1.0, 0.0, 0.0, "defense", -3)]
+	witch.promotions    = [_promo("sorcerer", 12)]
+	_reg(witch)
+
+	# --- Merfolk ---
+	var merfolk := ClassDefinition.new()
+	merfolk.class_id = "merfolk"; merfolk.display_name = "Merfolk"
+	merfolk.placeholder_color = Color(0.0, 0.7, 0.8)
+	merfolk.base_hp = 24; merfolk.base_strength = 8; merfolk.base_agility = 8
+	merfolk.base_intelligence = 5; merfolk.base_defense = 6; merfolk.base_resistance = 7
+	merfolk.hp_growth = Vector2i(4,6); merfolk.str_growth = Vector2i(2,4)
+	merfolk.agi_growth = Vector2i(2,4); merfolk.int_growth = Vector2i(1,3)
+	merfolk.def_growth = Vector2i(2,3); merfolk.res_growth = Vector2i(2,3)
+	merfolk.movement_type = TerrainDefs.MovementType.AQUATIC; merfolk.base_move_speed = 3.0; merfolk.can_lead = true; merfolk.deploy_cost = 95
+	merfolk.front_attacks = [_atk("Trident", P, 2, 1.1, FR)]
+	merfolk.back_attacks  = [_atk("Tidal Wave", COLD, 1, 1.0, FR, false, true)]
+	merfolk.skills        = [_skill("tide_turn", "Tide Turn", "Bonus strike when the enemy front row is gone.", 6, 0, 0.7)]
+	merfolk.promotions    = [_promo("sea_knight", 12)]
+	_reg(merfolk)
+
+	# --- Sea Knight ---
+	var sea_knight := ClassDefinition.new()
+	sea_knight.class_id = "sea_knight"; sea_knight.display_name = "Sea Knight"
+	sea_knight.placeholder_color = Color(0.0, 0.45, 0.6)
+	sea_knight.base_hp = 34; sea_knight.base_strength = 11; sea_knight.base_agility = 9
+	sea_knight.base_intelligence = 6; sea_knight.base_defense = 9; sea_knight.base_resistance = 9
+	sea_knight.hp_growth = Vector2i(5,7); sea_knight.str_growth = Vector2i(3,5)
+	sea_knight.agi_growth = Vector2i(2,4); sea_knight.int_growth = Vector2i(2,3)
+	sea_knight.def_growth = Vector2i(3,4); sea_knight.res_growth = Vector2i(2,3)
+	sea_knight.movement_type = TerrainDefs.MovementType.AQUATIC; sea_knight.base_move_speed = 3.0; sea_knight.can_lead = true; sea_knight.deploy_cost = 130
+	sea_knight.front_attacks = [_atk("Coral Blade", P, 2, 1.3, FR)]
+	sea_knight.back_attacks  = [_atk("Storm Surge", COLD, 1, 1.3, ANY)]
+	sea_knight.skills        = [_skill("deep_current", "Deep Current", "Gains +4 AGI when fighting on water.", 7, 6, 1.0, 0.0, 0.0, "agility", 4)]
+	sea_knight.promotions    = []
+	_reg(sea_knight)
 
 func _save_classes() -> void:
 	for class_id: String in _classes:

@@ -30,4 +30,6 @@ static func condition_met(skill, unit: UnitData, context: Dictionary) -> bool:
 		return bool(context.get("ally_dead", false))
 	if c == _SkillDef.SkillCondition.ENEMY_FRONT_EMPTY:
 		return bool(context.get("enemy_front_empty", false))
+	if c == _SkillDef.SkillCondition.ON_WATER:
+		return bool(context.get("on_water", false))
 	return false

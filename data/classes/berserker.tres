@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="ClassDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_c2lf5"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_cggsh"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_vl6c6"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_6t376"]
+
+[sub_resource type="Resource" id="Resource_iljpu"]
+script = ExtResource("1_c2lf5")
+attack_name = "War Cry"
+hits_all_in_row = true
+
+[sub_resource type="Resource" id="Resource_t6van"]
+script = ExtResource("1_c2lf5")
+attack_name = "Rampage"
+hits = 3
+power_multiplier = 1.3
+
+[sub_resource type="Resource" id="Resource_86set"]
+script = ExtResource("4_6t376")
+skill_id = "bloodlust"
+display_name = "Bloodlust"
+description = "Restores 5% HP after each attack."
+effect = 2
+heal_percent = 0.05
+
+[resource]
+script = ExtResource("3_vl6c6")
+class_id = "berserker"
+display_name = "Berserker"
+placeholder_color = Color(0.9, 0.1, 0.1, 1)
+base_hp = 40
+base_strength = 14
+base_agility = 9
+base_intelligence = 2
+base_defense = 8
+base_resistance = 3
+hp_growth = Vector2i(6, 8)
+str_growth = Vector2i(4, 6)
+agi_growth = Vector2i(2, 4)
+def_growth = Vector2i(2, 3)
+can_lead = true
+deploy_cost = 140
+front_attacks = Array[ExtResource("1_c2lf5")]([SubResource("Resource_t6van")])
+back_attacks = Array[ExtResource("1_c2lf5")]([SubResource("Resource_iljpu")])
+skills = [SubResource("Resource_86set")]

@@ -12,3 +12,4 @@ extends Resource
 @export var grid_z: int = 0
 
 @export var income: int = 0
+@export var has_aquatic_recruit: bool = false

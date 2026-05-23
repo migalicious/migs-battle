@@ -25,7 +25,16 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 
 	GameState.current_phase = GameState.Phase.IN_BATTLE
 
-	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data)
+	var _mm := get_tree().current_scene.get_node_or_null("MapManager") as MapManager
+	var atk_on_water := false
+	var def_on_water := false
+	if _mm:
+		var _WATER := TerrainDefs.TerrainType.WATER
+		var _ag := _mm.world_to_grid(sq_a.global_position)
+		var _dg := _mm.world_to_grid(sq_b.global_position)
+		atk_on_water = _mm.get_terrain(_ag.x, _ag.y) == _WATER
+		def_on_water = _mm.get_terrain(_dg.x, _dg.y) == _WATER
+	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data, atk_on_water, def_on_water)
 	_precompute_level_ups(_current_result)
 	battle_started.emit(sq_a.squad_data, sq_b.squad_data)
 

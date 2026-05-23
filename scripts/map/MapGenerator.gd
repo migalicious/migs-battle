@@ -16,6 +16,7 @@ static func generate(params: MapParams) -> Dictionary:
 	var towns: Array = _place_towns(grid, params)
 	_flatten_town_cells(grid, towns)
 	_apply_roads(grid, params, towns)
+	_mark_coastal_towns(towns, grid)
 
 	return {"terrain": grid, "towns": towns, "seed": actual_seed}
 
@@ -173,6 +174,20 @@ static func _place_towns(grid: Array, params: MapParams) -> Array:
 		spawned += 1
 
 	return towns
+
+static func _mark_coastal_towns(towns: Array, grid: Array) -> void:
+	for town_data in towns:
+		town_data["has_aquatic_recruit"] = _is_coastal(grid, town_data["grid_x"], town_data["grid_z"])
+
+static func _is_coastal(grid: Array, tx: int, tz: int, radius: int = 2) -> bool:
+	for dx in range(-radius, radius + 1):
+		for dz in range(-radius, radius + 1):
+			var nx := tx + dx
+			var nz := tz + dz
+			if nx >= 0 and nz >= 0 and nx < grid.size() and nz < grid[0].size():
+				if grid[nx][nz] == TerrainDefs.TerrainType.WATER:
+					return true
+	return false
 
 static func _flatten_town_cells(grid: Array, towns: Array) -> void:
 	for t in towns:

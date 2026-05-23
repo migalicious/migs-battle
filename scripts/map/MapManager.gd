@@ -82,6 +82,7 @@ func _spawn_towns(container: Node3D, defs: Array) -> void:
 		data.grid_x    = d["grid_x"]
 		data.grid_z    = d["grid_z"]
 		data.is_deploy_point = true
+		data.has_aquatic_recruit = d.get("has_aquatic_recruit", false)
 
 		var gpos   := Vector2i(data.grid_x, data.grid_z)
 		var wp     := grid_to_world(gpos)

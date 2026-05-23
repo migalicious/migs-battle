@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="ClassDefinition" format=3]
+
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_ud0g6"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_6u3ve"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_tgsaq"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_8sb3p"]
+
+[sub_resource type="Resource" id="Resource_tddba"]
+script = ExtResource("1_ud0g6")
+attack_name = "Tidal Wave"
+damage_type = 2
+hits_all_in_row = true
+
+[sub_resource type="Resource" id="Resource_1b6yg"]
+script = ExtResource("1_ud0g6")
+attack_name = "Trident"
+hits = 2
+power_multiplier = 1.1
+
+[sub_resource type="Resource" id="Resource_a1bgf"]
+script = ExtResource("2_6u3ve")
+target_class_id = "sea_knight"
+required_level = 12
+
+[sub_resource type="Resource" id="Resource_tdeh7"]
+script = ExtResource("4_8sb3p")
+skill_id = "tide_turn"
+display_name = "Tide Turn"
+description = "Bonus strike when the enemy front row is gone."
+condition = 6
+power = 0.7
+
+[resource]
+script = ExtResource("3_tgsaq")
+class_id = "merfolk"
+display_name = "Merfolk"
+placeholder_color = Color(0, 0.7, 0.8, 1)
+base_hp = 24
+base_strength = 8
+base_agility = 8
+base_defense = 6
+base_resistance = 7
+hp_growth = Vector2i(4, 6)
+str_growth = Vector2i(2, 4)
+agi_growth = Vector2i(2, 4)
+int_growth = Vector2i(1, 3)
+def_growth = Vector2i(2, 3)
+res_growth = Vector2i(2, 3)
+movement_type = 3
+can_lead = true
+deploy_cost = 95
+front_attacks = Array[ExtResource("1_ud0g6")]([SubResource("Resource_1b6yg")])
+back_attacks = Array[ExtResource("1_ud0g6")]([SubResource("Resource_tddba")])
+skills = [SubResource("Resource_tdeh7")]
+promotions = Array[ExtResource("2_6u3ve")]([SubResource("Resource_a1bgf")])

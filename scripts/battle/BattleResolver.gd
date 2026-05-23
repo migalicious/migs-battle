@@ -5,7 +5,8 @@ const ROUNDS: int = 3
 const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
 const _SkillDef = preload("res://scripts/battle/SkillDefinition.gd")
 
-static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
+static func resolve(attacker: SquadData, defender: SquadData,
+		atk_on_water: bool = false, def_on_water: bool = false) -> BattleResult:
 	var result := BattleResult.new()
 	result.attacker_squad_id = attacker.squad_id
 	result.defender_squad_id = defender.squad_id
@@ -19,7 +20,7 @@ static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 	for round_num in range(ROUNDS):
 		if _all_dead(atk_units) or _all_dead(def_units):
 			break
-		_run_round(atk_units, def_units, battle_log, round_num + 1)
+		_run_round(atk_units, def_units, battle_log, round_num + 1, atk_on_water, def_on_water)
 
 	result.action_log = battle_log
 	result.attacker_unit_states = atk_units
@@ -81,7 +82,8 @@ static func _avg_level(units: Array[UnitData]) -> float:
 	return float(total) / float(units.size())
 
 static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData],
-		battle_log: Array[BattleAction], round_num: int) -> void:
+		battle_log: Array[BattleAction], round_num: int,
+		atk_on_water: bool = false, def_on_water: bool = false) -> void:
 	# Initiative queue sorted by agility descending
 	var queue: Array = []
 	for u in atk_units:
@@ -98,17 +100,18 @@ static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData],
 			continue
 		var enemies: Array[UnitData] = def_units if entry["side"] == 0 else atk_units
 		var allies: Array[UnitData]  = atk_units if entry["side"] == 0 else def_units
+		var on_water: bool = atk_on_water if entry["side"] == 0 else def_on_water
 		if _all_dead(enemies):
 			break
-		_execute_attacks(unit, enemies, allies, battle_log, round_num)
+		_execute_attacks(unit, enemies, allies, battle_log, round_num, on_water)
 
 static func _execute_attacks(unit: UnitData, enemies: Array[UnitData], allies: Array[UnitData],
-		battle_log: Array[BattleAction], round_num: int) -> void:
+		battle_log: Array[BattleAction], round_num: int, on_water: bool = false) -> void:
 	var cls: ClassDefinition = UnitRegistry.get_class_def(unit.class_id)
 	if not cls:
 		return
 	var attacks: Array = cls.front_attacks if unit.row == 0 else cls.back_attacks
-	var context := _build_context(unit, allies, enemies, round_num)
+	var context := _build_context(unit, allies, enemies, round_num, on_water)
 
 	var dmg_mult := 1.0
 	for skill in cls.skills:
@@ -119,6 +122,14 @@ static func _execute_attacks(unit: UnitData, enemies: Array[UnitData], allies: A
 	for atk in attacks:
 		var atk_def := atk as AttackDefinition
 		if not SkillSystem.can_use_attack(unit, atk_def, context):
+			continue
+		if atk_def.is_heal:
+			for _hit in range(atk_def.hits):
+				var lowest := _find_lowest_hp_ally(allies)
+				if lowest:
+					var heal := maxi(1, int(_get_stat(unit, "intelligence") * atk_def.power_multiplier))
+					lowest.hp = mini(lowest.max_hp, lowest.hp + heal)
+					_log_heal(unit, lowest, heal, atk_def.attack_name, battle_log)
 			continue
 		var targets: Array[UnitData] = _select_targets(atk_def, enemies)
 		for _hit in range(atk_def.hits):
@@ -197,7 +208,7 @@ static func _apply_consumables(atk_units: Array[UnitData], def_units: Array[Unit
 		u.held_item = ""
 
 static func _build_context(actor: UnitData, allies: Array[UnitData],
-		enemies: Array[UnitData], round_num: int) -> Dictionary:
+		enemies: Array[UnitData], round_num: int, on_water: bool = false) -> Dictionary:
 	var alive_allies := 0
 	for u in allies:
 		if u.is_alive:
@@ -212,6 +223,7 @@ static func _build_context(actor: UnitData, allies: Array[UnitData],
 		"hp_fraction": float(actor.hp) / float(maxi(actor.max_hp, 1)),
 		"ally_dead": alive_allies < allies.size(),
 		"enemy_front_empty": front_alive == 0,
+		"on_water": on_water,
 	}
 
 static func _apply_guard(target: UnitData, dmg: int) -> int:
@@ -256,6 +268,12 @@ static func _fire_post_attack_skills(actor: UnitData, target: UnitData,
 				var extra := _calculate_damage(actor, target, _make_skill_atk(skill))
 				extra = _apply_guard(target, extra)
 				_apply_skill_hit(actor, target, extra, skill.display_name, battle_log)
+		elif eff == _SkillDef.SkillEffect.STAT_DEBUFF_ENEMY:
+			var cur := int(target.get(skill.stat_target))
+			target.set(skill.stat_target, maxi(0, cur + skill.stat_amount))
+		elif eff == _SkillDef.SkillEffect.STAT_BUFF_SELF:
+			var cur := int(actor.get(skill.stat_target))
+			actor.set(skill.stat_target, cur + skill.stat_amount)
 
 static func _apply_skill_hit(actor: UnitData, target: UnitData, dmg: int,
 		skill_name: String, battle_log: Array[BattleAction]) -> void:

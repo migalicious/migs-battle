@@ -9,3 +9,4 @@ extends Resource
 @export var hits_all_in_column: bool = false
 @export var hits_all_in_row: bool = false
 @export var condition_id: String = ""
+@export var is_heal: bool = false

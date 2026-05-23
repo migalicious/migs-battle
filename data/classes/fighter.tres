@@ -31,6 +31,16 @@ target_class_id = "mage"
 required_level = 4
 
 [sub_resource type="Resource" id="Resource_0pk4d"]
+script = ExtResource("2_5i77r")
+target_class_id = "warrior"
+required_level = 6
+
+[sub_resource type="Resource" id="Resource_aibcc"]
+script = ExtResource("2_5i77r")
+target_class_id = "witch"
+required_level = 4
+
+[sub_resource type="Resource" id="Resource_ptng6"]
 script = ExtResource("4_riule")
 skill_id = "grit"
 display_name = "Grit"
@@ -57,5 +67,5 @@ def_growth = Vector2i(2, 3)
 deploy_cost = 50
 front_attacks = Array[ExtResource("1_27sjw")]([SubResource("Resource_te7x4")])
 back_attacks = Array[ExtResource("1_27sjw")]([SubResource("Resource_27g4u")])
-skills = [SubResource("Resource_0pk4d")]
-promotions = Array[ExtResource("2_5i77r")]([SubResource("Resource_81tom"), SubResource("Resource_0jg40"), SubResource("Resource_nhd6u")])
+skills = [SubResource("Resource_ptng6")]
+promotions = Array[ExtResource("2_5i77r")]([SubResource("Resource_81tom"), SubResource("Resource_0jg40"), SubResource("Resource_nhd6u"), SubResource("Resource_0pk4d"), SubResource("Resource_aibcc")])

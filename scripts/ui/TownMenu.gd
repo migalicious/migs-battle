@@ -122,6 +122,15 @@ func _build_friendly_body(reserve: Array) -> void:
 
 	_body_vbox.add_child(HSeparator.new())
 
+	if _current_town.town_data and _current_town.town_data.has_aquatic_recruit:
+		var recruit_cost := 120
+		var recruit_btn := Button.new()
+		recruit_btn.text = "Recruit Merfolk  (%dg)" % recruit_cost
+		recruit_btn.disabled = GameState.player_gold < recruit_cost
+		recruit_btn.pressed.connect(_on_recruit_merfolk.bind(recruit_cost))
+		_body_vbox.add_child(recruit_btn)
+		_body_vbox.add_child(HSeparator.new())
+
 	var shop_btn := Button.new()
 	shop_btn.text = "Shop"
 	shop_btn.pressed.connect(_on_shop_pressed)
@@ -285,6 +294,21 @@ func _on_equip_pressed(unit_opt: OptionButton, item_opt: OptionButton, all_units
 	call_deferred("_build_shop_body")
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
+
+func _on_recruit_merfolk(cost: int) -> void:
+	if GameState.player_gold < cost:
+		return
+	GameState.player_gold -= cost
+	GameState.gold_changed.emit(TerrainDefs.Faction.PLAYER, GameState.player_gold)
+	var unit := UnitRegistry.create_unit("merfolk", 1)
+	unit.unit_name = "Merfolk"
+	unit.is_leader = true
+	var sd := SquadData.new()
+	sd.squad_id = "merfolk_%d" % Time.get_ticks_msec()
+	sd.units = [unit]
+	sd.recalculate_speed(TerrainDefs.TerrainType.PLAINS)
+	GameState.reserve_squads.append(sd)
+	close()
 
 func _on_deploy_pressed(squad_data: SquadData) -> void:
 	deploy_requested.emit(squad_data, _current_town)

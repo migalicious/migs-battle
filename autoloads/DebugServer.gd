@@ -113,7 +113,9 @@ func _handle(raw: String) -> void:
 				var arr := []
 				for t in map_mgr.get_towns():
 					var sp := get_viewport().get_camera_3d().unproject_position(t.global_position)
-					arr.append({"id": t.town_data.town_id, "wx": t.global_position.x, "wz": t.global_position.z, "sx": sp.x, "sy": sp.y})
+					arr.append({"id": t.town_data.town_id, "wx": t.global_position.x, "wz": t.global_position.z, "sx": sp.x, "sy": sp.y,
+						"type": int(t.town_data.town_type), "faction": int(t.faction),
+						"has_aquatic_recruit": t.town_data.has_aquatic_recruit})
 				_send({"towns": arr})
 		"equip_item":
 			var unit_name_eq := str(d.get("unit", ""))

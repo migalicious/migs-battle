@@ -23,6 +23,11 @@ target_class_id = "sorcerer"
 required_level = 12
 
 [sub_resource type="Resource" id="Resource_62p5u"]
+script = ExtResource("2_6seil")
+target_class_id = "cleric"
+required_level = 8
+
+[sub_resource type="Resource" id="Resource_wkftd"]
 script = ExtResource("4_1aw3n")
 skill_id = "mana_surge"
 display_name = "Mana Surge"
@@ -50,5 +55,5 @@ can_lead = true
 deploy_cost = 70
 front_attacks = Array[ExtResource("1_gf0sj")]([SubResource("Resource_a5vvi")])
 back_attacks = Array[ExtResource("1_gf0sj")]([SubResource("Resource_oh764")])
-skills = [SubResource("Resource_62p5u")]
-promotions = Array[ExtResource("2_6seil")]([SubResource("Resource_et4w3")])
+skills = [SubResource("Resource_wkftd")]
+promotions = Array[ExtResource("2_6seil")]([SubResource("Resource_et4w3"), SubResource("Resource_62p5u")])

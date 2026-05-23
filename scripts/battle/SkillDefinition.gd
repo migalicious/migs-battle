@@ -13,6 +13,7 @@ enum SkillCondition {
 	LAST_ROUND,
 	ALLY_DEAD,
 	ENEMY_FRONT_EMPTY,
+	ON_WATER,
 }
 
 enum SkillEffect {
@@ -22,6 +23,8 @@ enum SkillEffect {
 	HEAL_ALLY,
 	GUARD,
 	EXTRA_ATTACK,
+	STAT_BUFF_SELF,
+	STAT_DEBUFF_ENEMY,
 }
 
 @export var condition: SkillCondition = SkillCondition.ALWAYS
@@ -29,3 +32,5 @@ enum SkillEffect {
 @export var power: float = 1.0
 @export var heal_percent: float = 0.0
 @export var damage_reduction: float = 0.0
+@export var stat_target: String = ""
+@export var stat_amount: int = 0

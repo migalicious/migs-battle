@@ -27,6 +27,7 @@ var _is_selected: bool = false
 var _is_moving: bool = false
 var _destination: Vector3 = Vector3.ZERO
 var _is_flying: bool = false
+var _is_aquatic: bool = false
 var _path_line: MeshInstance3D = null
 
 func _ready() -> void:
@@ -111,6 +112,7 @@ func setup(data: SquadData) -> void:
 		var cls := UnitRegistry.get_class_def(leader.class_id) as ClassDefinition
 		if cls:
 			_is_flying = cls.movement_type == TerrainDefs.MovementType.FLYING
+			_is_aquatic = cls.movement_type == TerrainDefs.MovementType.AQUATIC
 
 	# Recalculate speed for starting terrain
 	data.recalculate_speed(TerrainDefs.TerrainType.PLAINS)
@@ -135,7 +137,7 @@ func _physics_process(_delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 
-	if _is_flying:
+	if _is_flying or _is_aquatic:
 		var dir := _destination - global_position
 		dir.y = 0.0
 		if dir.length() < 0.3:
@@ -182,7 +184,7 @@ func _update_path_line() -> void:
 func set_destination(world_pos: Vector3) -> void:
 	_destination = Vector3(world_pos.x, global_position.y, world_pos.z)
 	_is_moving = true
-	if not _is_flying and _nav_agent:
+	if not _is_flying and not _is_aquatic and _nav_agent:
 		_nav_agent.target_position = _destination
 
 func select_squad() -> void:

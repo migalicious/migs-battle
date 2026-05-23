@@ -35,13 +35,15 @@ PORT = 6560
 
 BATTLE_ACTION   = {0: "ATTACK", 1: "HEAL", 2: "SKILL", 3: "MISS", 4: "KILL"}
 SKILL_CONDITION = {0: "ALWAYS", 1: "HP_BELOW_50", 2: "HP_ABOVE_75",
-                   3: "FIRST_ROUND", 4: "LAST_ROUND", 5: "ALLY_DEAD", 6: "ENEMY_FRONT_EMPTY"}
+                   3: "FIRST_ROUND", 4: "LAST_ROUND", 5: "ALLY_DEAD",
+                   6: "ENEMY_FRONT_EMPTY", 7: "ON_WATER"}
 SKILL_EFFECT    = {0: "BONUS_DAMAGE", 1: "DAMAGE_MULTIPLIER", 2: "HEAL_SELF",
-                   3: "HEAL_ALLY", 4: "GUARD", 5: "EXTRA_ATTACK"}
+                   3: "HEAL_ALLY", 4: "GUARD", 5: "EXTRA_ATTACK",
+                   6: "STAT_BUFF_SELF", 7: "STAT_DEBUFF_ENEMY"}
 ITEM_TYPE       = {0: "passive", 1: "consumable"}
 DAMAGE_TYPE     = {0: "Physical", 1: "Fire", 2: "Cold", 3: "Thunder", 4: "Holy", 5: "Dark"}
 TARGET_ROW      = {0: "FRONT", 1: "BACK", 2: "ANY"}
-MOVE_TYPE       = {0: "Infantry", 1: "Cavalry", 2: "Flying"}
+MOVE_TYPE       = {0: "Infantry", 1: "Cavalry", 2: "Flying", 3: "Aquatic"}
 FACTION         = {0: "player", 1: "enemy", -1: "neutral"}
 
 
@@ -367,8 +369,9 @@ def _cli():
     elif cmd == "towns":
         for t in get_towns():
             owner = FACTION.get(t.get("faction", -2), "?")
-            print(f'  {t["id"]:20}  world=({t["wx"]:.0f}, {t["wz"]:.0f})'
-                  f'  screen=({t["sx"]:.0f}, {t["sy"]:.0f})')
+            coastal = " [COASTAL]" if t.get("has_aquatic_recruit") else ""
+            print(f'  {t["id"]:20}  faction={owner:7}  world=({t["wx"]:.0f}, {t["wz"]:.0f})'
+                  f'  screen=({t["sx"]:.0f}, {t["sy"]:.0f}){coastal}')
 
     elif cmd == "inject":
         if len(args) < 2:
