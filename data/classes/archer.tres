@@ -29,5 +29,6 @@ agi_growth = Vector2i(3, 4)
 def_growth = Vector2i(1, 2)
 res_growth = Vector2i(2, 3)
 can_lead = true
+deploy_cost = 60
 front_attacks = Array[ExtResource("1_uj0l1")]([SubResource("Resource_10evu")])
 back_attacks = Array[ExtResource("1_uj0l1")]([SubResource("Resource_7acyf")])

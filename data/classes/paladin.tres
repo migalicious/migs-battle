@@ -32,5 +32,6 @@ int_growth = Vector2i(2, 3)
 def_growth = Vector2i(3, 5)
 res_growth = Vector2i(2, 3)
 can_lead = true
+deploy_cost = 130
 front_attacks = Array[ExtResource("1_gho34")]([SubResource("Resource_mj0me")])
 back_attacks = Array[ExtResource("1_gho34")]([SubResource("Resource_wm3ht")])

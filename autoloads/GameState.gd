@@ -1,6 +1,7 @@
 extends Node
 
 signal faction_won(faction_id: int)
+signal gold_changed(faction: int, new_total: int)
 
 enum Phase { OVERWORLD, IN_BATTLE, PAUSED, VICTORY, DEFEAT }
 
@@ -17,8 +18,35 @@ var active_conditions: Array[String] = ["hq_capture"]
 var pending_map_params: MapParams = null
 var configured_squads: Array[SquadData] = []
 
+var player_gold: int = 100
+var enemy_gold: int = 100
+var gold_tick_interval: float = 10.0
+var _gold_timer: float = 0.0
+var player_inventory: Dictionary = {}
+
 func _ready() -> void:
 	pass
+
+func _process(delta: float) -> void:
+	if current_phase != Phase.OVERWORLD:
+		return
+	_gold_timer += delta
+	if _gold_timer >= gold_tick_interval:
+		_gold_timer = 0.0
+		_collect_income()
+
+func _collect_income() -> void:
+	var map_mgr := _get_map_manager()
+	if not map_mgr:
+		return
+	for town in map_mgr.get_towns():
+		var town_owner: int = town_ownership.get(town.town_data.town_id, TerrainDefs.Faction.NEUTRAL)
+		var income: int = town.town_data.income
+		if town_owner == TerrainDefs.Faction.PLAYER:
+			player_gold += income
+			gold_changed.emit(TerrainDefs.Faction.PLAYER, player_gold)
+		elif town_owner == TerrainDefs.Faction.ENEMY:
+			enemy_gold += income
 
 # ── Win Condition Checks ──────────────────────────────────────────────────────
 
@@ -84,6 +112,10 @@ func reset() -> void:
 	active_conditions = ["hq_capture"]
 	pending_map_params = null
 	configured_squads = []
+	player_gold = 100
+	enemy_gold = 100
+	_gold_timer = 0.0
+	player_inventory = {}
 
 func _get_map_manager() -> MapManager:
 	var scene := get_tree().current_scene

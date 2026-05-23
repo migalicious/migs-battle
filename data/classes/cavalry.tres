@@ -33,5 +33,6 @@ def_growth = Vector2i(2, 3)
 movement_type = 1
 base_move_speed = 4.5
 can_lead = true
+deploy_cost = 100
 front_attacks = Array[ExtResource("1_hmard")]([SubResource("Resource_db80b")])
 back_attacks = Array[ExtResource("1_hmard")]([SubResource("Resource_ooalj")])

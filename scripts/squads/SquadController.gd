@@ -98,7 +98,7 @@ func _add_unit(data: SquadData, class_id: String, unit_name: String, row: int, c
 
 func _connect_town_signals() -> void:
 	for town in _map_manager.get_towns():
-		town.town_selected.connect(_on_town_selected.bind(town))
+		town.town_selected.connect(_on_town_selected)
 
 func _on_town_selected(town: TownNode) -> void:
 	if not _town_menu:
@@ -138,7 +138,35 @@ func _handle_squad_at_town(squad: Squad, town: TownNode) -> void:
 
 # ── Deploy Reserve Squad ──────────────────────────────────────────────────────
 
+func _squad_deploy_cost(squad: SquadData) -> int:
+	var total := 0
+	for unit in squad.get_alive_units():
+		var cls := UnitRegistry.get_class_def(unit.class_id) as ClassDefinition
+		if cls:
+			total += cls.deploy_cost
+	return total
+
+func _show_cant_afford(pos: Vector3, cost: int) -> void:
+	var lbl := Label3D.new()
+	lbl.text = "Need %dg!" % cost
+	lbl.pixel_size = 0.025
+	lbl.font_size = 16
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.modulate = Color(1.0, 0.3, 0.3)
+	lbl.global_position = Vector3(pos.x, 2.5, pos.z)
+	add_child(lbl)
+	var tween := create_tween()
+	tween.tween_property(lbl, "modulate:a", 0.0, 1.0)
+	tween.tween_callback(lbl.queue_free)
+
 func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
+	var cost := _squad_deploy_cost(squad_data)
+	if GameState.player_gold < cost:
+		_show_cant_afford(town.global_position, cost)
+		return
+	GameState.player_gold -= cost
+	GameState.gold_changed.emit(TerrainDefs.Faction.PLAYER, GameState.player_gold)
+
 	var idx: int = GameState.reserve_squads.find(squad_data)
 	if idx >= 0:
 		GameState.reserve_squads.remove_at(idx)

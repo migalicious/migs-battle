@@ -25,6 +25,7 @@ window/size/mode=2
 [autoload]
 
 UnitRegistry="*res://autoloads/UnitRegistry.gd"
+ItemRegistry="*res://autoloads/ItemRegistry.gd"
 BattleManager="*res://autoloads/BattleManager.gd"
 GameState="*res://autoloads/GameState.gd"
 GameSetupManager="*res://scripts/ui/GameSetupManager.gd"

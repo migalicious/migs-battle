@@ -2,6 +2,7 @@ class_name BattleResolver
 extends RefCounted
 
 const ROUNDS: int = 3
+const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
 
 static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 	var result := BattleResult.new()
@@ -11,6 +12,8 @@ static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 	var atk_units: Array[UnitData] = _copy_units(attacker.units)
 	var def_units: Array[UnitData] = _copy_units(defender.units)
 	var battle_log: Array[BattleAction] = []
+
+	_apply_consumables(atk_units, def_units)
 
 	for _round in range(ROUNDS):
 		if _all_dead(atk_units) or _all_dead(def_units):
@@ -153,21 +156,47 @@ static func _select_targets(atk_def: AttackDefinition, enemies: Array[UnitData])
 	# Single random target from pool
 	return [base_pool[randi() % base_pool.size()]]
 
+static func _get_stat(unit: UnitData, stat: String) -> float:
+	var base: float = float(unit.get(stat))
+	if unit.held_item == "":
+		return base
+	var item = ItemRegistry.get_item(unit.held_item)
+	if not item:
+		return base
+	match stat:
+		"strength":     return base + float(item.str_bonus)
+		"agility":      return base + float(item.agi_bonus)
+		"defense":      return base + float(item.def_bonus)
+		"resistance":   return base + float(item.res_bonus)
+		"intelligence": return base + float(item.int_bonus)
+	return base
+
+static func _apply_consumables(atk_units: Array[UnitData], def_units: Array[UnitData]) -> void:
+	for u in atk_units + def_units:
+		if not u.is_alive or u.held_item == "":
+			continue
+		var item = ItemRegistry.get_item(u.held_item)
+		if not item or item.item_type != _ItemDef.ItemType.CONSUMABLE:
+			continue
+		if item.heal_percent > 0.0:
+			u.hp = mini(u.max_hp, u.hp + int(float(u.max_hp) * item.heal_percent))
+		u.held_item = ""
+
 static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: AttackDefinition) -> int:
 	var stat: float
 	var defense: float
 	if atk_def.damage_type == TerrainDefs.DamageType.PHYSICAL:
-		stat = float(attacker.strength)
-		defense = float(target.defense)
+		stat = _get_stat(attacker, "strength")
+		defense = _get_stat(target, "defense")
 	else:
-		stat = float(attacker.intelligence)
-		defense = float(target.resistance)
+		stat = _get_stat(attacker, "intelligence")
+		defense = _get_stat(target, "resistance")
 
 	var base_dmg := maxf(1.0, (stat * atk_def.power_multiplier) - (defense * 0.5))
 	base_dmg += base_dmg * 0.1 * (randf() * 2.0 - 1.0)
 
 	# Hit/miss check: base 80%, modified by agility delta, clamped to [50%, 100%]
-	var hit_chance := clampf(0.8 + (float(attacker.agility) - float(target.agility)) * 0.02, 0.5, 1.0)
+	var hit_chance := clampf(0.8 + (_get_stat(attacker, "agility") - _get_stat(target, "agility")) * 0.02, 0.5, 1.0)
 	if randf() > hit_chance:
 		return -1  # Miss
 

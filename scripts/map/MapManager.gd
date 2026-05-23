@@ -77,6 +77,7 @@ func _spawn_towns(container: Node3D, defs: Array) -> void:
 		var data       := TownData.new()
 		data.town_id   = d["town_id"]
 		data.town_type = d["town_type"] as TerrainDefs.TownType
+		data.income = _income_for_type(data.town_type)
 		data.starting_faction = d["faction"]
 		data.grid_x    = d["grid_x"]
 		data.grid_z    = d["grid_z"]
@@ -172,3 +173,10 @@ func get_hq(faction: int) -> TownNode:
 		if t.town_data and t.town_data.town_type == TerrainDefs.TownType.HQ and t.town_data.starting_faction == faction:
 			return t
 	return null
+
+func _income_for_type(t: TerrainDefs.TownType) -> int:
+	match t:
+		TerrainDefs.TownType.TOWN:   return 15
+		TerrainDefs.TownType.CASTLE: return 30
+		TerrainDefs.TownType.HQ:     return 50
+		_: return 0

@@ -102,7 +102,7 @@ func _build_default_classes() -> void:
 	fighter.hp_growth = Vector2i(4,6); fighter.str_growth = Vector2i(2,4)
 	fighter.agi_growth = Vector2i(2,3); fighter.int_growth = Vector2i(1,2)
 	fighter.def_growth = Vector2i(2,3); fighter.res_growth = Vector2i(1,2)
-	fighter.movement_type = INF; fighter.base_move_speed = 3.0; fighter.can_lead = false
+	fighter.movement_type = INF; fighter.base_move_speed = 3.0; fighter.can_lead = false; fighter.deploy_cost = 50
 	fighter.front_attacks = [_atk("Slash", P, 2, 1.0, FR)]
 	fighter.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
 	fighter.promotions    = [_promo("knight",5), _promo("archer",4), _promo("mage",4)]
@@ -117,7 +117,7 @@ func _build_default_classes() -> void:
 	knight.hp_growth = Vector2i(5,7); knight.str_growth = Vector2i(3,5)
 	knight.agi_growth = Vector2i(1,3); knight.int_growth = Vector2i(1,2)
 	knight.def_growth = Vector2i(3,4); knight.res_growth = Vector2i(1,2)
-	knight.movement_type = INF; knight.base_move_speed = 3.0; knight.can_lead = true
+	knight.movement_type = INF; knight.base_move_speed = 3.0; knight.can_lead = true; knight.deploy_cost = 80
 	knight.front_attacks = [_atk("Slash", P, 2, 1.1, FR)]
 	knight.back_attacks  = [_atk("Slash", P, 1, 0.9, FR)]
 	knight.promotions    = [_promo("paladin",15), _promo("cavalry",8), _promo("gryphon_rider",10)]
@@ -132,7 +132,7 @@ func _build_default_classes() -> void:
 	paladin.hp_growth = Vector2i(6,8); paladin.str_growth = Vector2i(3,5)
 	paladin.agi_growth = Vector2i(2,3); paladin.int_growth = Vector2i(2,3)
 	paladin.def_growth = Vector2i(3,5); paladin.res_growth = Vector2i(2,3)
-	paladin.movement_type = INF; paladin.base_move_speed = 3.0; paladin.can_lead = true
+	paladin.movement_type = INF; paladin.base_move_speed = 3.0; paladin.can_lead = true; paladin.deploy_cost = 130
 	paladin.front_attacks = [_atk("Slash", P, 3, 1.2, FR)]
 	paladin.back_attacks  = [_atk("Holy Light", HOLY, 1, 1.0, ANY)]
 	paladin.promotions    = []
@@ -147,7 +147,7 @@ func _build_default_classes() -> void:
 	archer.hp_growth = Vector2i(3,5); archer.str_growth = Vector2i(2,3)
 	archer.agi_growth = Vector2i(3,4); archer.int_growth = Vector2i(1,2)
 	archer.def_growth = Vector2i(1,2); archer.res_growth = Vector2i(2,3)
-	archer.movement_type = INF; archer.base_move_speed = 3.0; archer.can_lead = true
+	archer.movement_type = INF; archer.base_move_speed = 3.0; archer.can_lead = true; archer.deploy_cost = 60
 	archer.front_attacks = [_atk("Shot", P, 2, 0.9, FR)]
 	archer.back_attacks  = [_atk("Shot", P, 2, 1.0, BK)]
 	archer.promotions    = []
@@ -162,7 +162,7 @@ func _build_default_classes() -> void:
 	mage.hp_growth = Vector2i(2,4); mage.str_growth = Vector2i(1,2)
 	mage.agi_growth = Vector2i(1,2); mage.int_growth = Vector2i(4,6)
 	mage.def_growth = Vector2i(1,2); mage.res_growth = Vector2i(3,4)
-	mage.movement_type = INF; mage.base_move_speed = 3.0; mage.can_lead = true
+	mage.movement_type = INF; mage.base_move_speed = 3.0; mage.can_lead = true; mage.deploy_cost = 70
 	mage.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
 	mage.back_attacks  = [_atk("Magic", FIRE, 2, 1.2, FR)]
 	mage.promotions    = [_promo("sorcerer", 12)]
@@ -177,7 +177,7 @@ func _build_default_classes() -> void:
 	sorcerer.hp_growth = Vector2i(3,5); sorcerer.str_growth = Vector2i(1,2)
 	sorcerer.agi_growth = Vector2i(1,2); sorcerer.int_growth = Vector2i(5,7)
 	sorcerer.def_growth = Vector2i(1,2); sorcerer.res_growth = Vector2i(4,5)
-	sorcerer.movement_type = INF; sorcerer.base_move_speed = 3.0; sorcerer.can_lead = true
+	sorcerer.movement_type = INF; sorcerer.base_move_speed = 3.0; sorcerer.can_lead = true; sorcerer.deploy_cost = 120
 	sorcerer.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
 	sorcerer.back_attacks  = [_atk("Arcane Blast", DARK, 2, 1.5, FR, true)]
 	sorcerer.promotions    = []
@@ -192,7 +192,7 @@ func _build_default_classes() -> void:
 	cavalry.hp_growth = Vector2i(5,7); cavalry.str_growth = Vector2i(3,4)
 	cavalry.agi_growth = Vector2i(3,5); cavalry.int_growth = Vector2i(1,2)
 	cavalry.def_growth = Vector2i(2,3); cavalry.res_growth = Vector2i(1,2)
-	cavalry.movement_type = CAV; cavalry.base_move_speed = 4.5; cavalry.can_lead = true
+	cavalry.movement_type = CAV; cavalry.base_move_speed = 4.5; cavalry.can_lead = true; cavalry.deploy_cost = 100
 	cavalry.front_attacks = [_atk("Lance Charge", P, 2, 1.3, FR)]
 	cavalry.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
 	cavalry.promotions    = []
@@ -207,7 +207,7 @@ func _build_default_classes() -> void:
 	gryphon.hp_growth = Vector2i(4,6); gryphon.str_growth = Vector2i(2,4)
 	gryphon.agi_growth = Vector2i(3,5); gryphon.int_growth = Vector2i(1,3)
 	gryphon.def_growth = Vector2i(2,3); gryphon.res_growth = Vector2i(2,3)
-	gryphon.movement_type = FLY; gryphon.base_move_speed = 2.8; gryphon.can_lead = true
+	gryphon.movement_type = FLY; gryphon.base_move_speed = 2.8; gryphon.can_lead = true; gryphon.deploy_cost = 110
 	gryphon.front_attacks = [_atk("Talon", P, 2, 1.0, FR)]
 	gryphon.back_attacks  = [_atk("Wind Blade", COLD, 1, 1.1, ANY)]
 	gryphon.promotions    = []

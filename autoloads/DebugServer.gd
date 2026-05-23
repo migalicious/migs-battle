@@ -104,6 +104,71 @@ func _handle(raw: String) -> void:
 			_send({"tree": _dump_tree(get_tree().current_scene, 0)})
 		"state":
 			_send(_build_state())
+		"towns":
+			var map_mgr := get_tree().current_scene.get_node_or_null("MapManager") as MapManager
+			if not map_mgr:
+				_send({"towns": []})
+			else:
+				var arr := []
+				for t in map_mgr.get_towns():
+					var sp := get_viewport().get_camera_3d().unproject_position(t.global_position)
+					arr.append({"id": t.town_data.town_id, "wx": t.global_position.x, "wz": t.global_position.z, "sx": sp.x, "sy": sp.y})
+				_send({"towns": arr})
+		"equip_item":
+			var unit_name_eq := str(d.get("unit", ""))
+			var item_id_eq := str(d.get("item", ""))
+			var found_unit: UnitData = null
+			for sq in GameState.player_squads:
+				if sq is Squad:
+					for u in (sq as Squad).squad_data.units:
+						if u.unit_name == unit_name_eq:
+							found_unit = u
+			if not found_unit:
+				for sd in GameState.reserve_squads:
+					if sd is SquadData:
+						for u in (sd as SquadData).units:
+							if u.unit_name == unit_name_eq:
+								found_unit = u
+			if not found_unit:
+				_send({"error": "unit not found: %s" % unit_name_eq})
+			else:
+				if found_unit.held_item != "":
+					GameState.player_inventory[found_unit.held_item] = GameState.player_inventory.get(found_unit.held_item, 0) + 1
+				found_unit.held_item = item_id_eq
+				if item_id_eq != "" and GameState.player_inventory.has(item_id_eq):
+					GameState.player_inventory[item_id_eq] = maxi(0, (GameState.player_inventory[item_id_eq] as int) - 1)
+				_send({"ok": true, "unit": unit_name_eq, "item": item_id_eq})
+		"open_town":
+			var town_id := str(d.get("town_id", "player_hq"))
+			var map_mgr2 := get_tree().current_scene.get_node_or_null("MapManager") as MapManager
+			if not map_mgr2:
+				_send({"error": "no MapManager"})
+			else:
+				var found: TownNode = null
+				for t in map_mgr2.get_towns():
+					if t.town_data.town_id == town_id:
+						found = t
+						break
+				if found:
+					found.emit_signal("town_selected", found)
+					_send({"ok": true, "town": town_id})
+				else:
+					_send({"error": "town not found: %s" % town_id})
+		"force_battle":
+			var atk_sq: Squad = null
+			var def_sq: Squad = null
+			for sq in GameState.player_squads:
+				if sq is Squad: atk_sq = sq; break
+			for sq in GameState.enemy_squads:
+				if sq is Squad: def_sq = sq; break
+			if not atk_sq or not def_sq:
+				_send({"error": "need at least one player and one enemy squad"})
+			else:
+				var result := BattleResolver.resolve(atk_sq.squad_data, def_sq.squad_data)
+				var unit_states: Array = []
+				for u in result.attacker_unit_states:
+					unit_states.append({"name": u.unit_name, "held_item": u.held_item, "hp": u.hp, "alive": u.is_alive})
+				_send({"ok": true, "attacker_wiped": result.attacker_wiped, "defender_wiped": result.defender_wiped, "attacker_xp": result.attacker_xp, "defender_xp": result.defender_xp, "attacker_units": unit_states})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -151,6 +216,7 @@ func _build_state() -> Dictionary:
 		"scene": str(scene.name) if scene else "",
 		"phase": GameState.current_phase,
 		"map_seed": GameState.map_seed,
+		"player_gold": GameState.player_gold,
 		"player_squads": GameState.player_squads.size(),
 		"enemy_squads": GameState.enemy_squads.size(),
 		"reserve_squads": GameState.reserve_squads.size(),
