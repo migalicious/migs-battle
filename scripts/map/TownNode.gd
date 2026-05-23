@@ -190,10 +190,7 @@ func _tween_colors(new_faction: int) -> void:
 		tween.tween_property(_tower_mat, "albedo_color", target.darkened(0.15), 0.5)
 
 func _faction_color(f: int) -> Color:
-	match f:
-		TerrainDefs.Faction.PLAYER: return Color(0.20, 0.40, 0.90)
-		TerrainDefs.Faction.ENEMY:  return Color(0.90, 0.20, 0.20)
-		_:                          return Color(0.55, 0.55, 0.55)
+	return TerrainDefs.FACTION_COLORS.get(f, Color(0.55, 0.55, 0.55))
 
 func _make_box(size: Vector3, color: Color) -> MeshInstance3D:
 	var m := MeshInstance3D.new()

@@ -16,6 +16,8 @@ func _ready() -> void:
 func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 	if _in_battle or sq_a.in_battle or sq_b.in_battle:
 		return
+	if not GameState.are_hostile(sq_a.faction, sq_b.faction):
+		return
 
 	_in_battle = true
 	sq_a.in_battle = true
@@ -98,8 +100,7 @@ func _grant_xp(data: SquadData, total_xp: int) -> void:
 				print("[BattleManager] %s promoted → %s" % [unit.unit_name, promo])
 
 func _handle_loser(squad: Squad) -> void:
-	GameState.player_squads.erase(squad)
-	GameState.enemy_squads.erase(squad)
+	GameState.unregister_squad(squad)
 
 	# Keep only survivors
 	var alive: Array[UnitData] = []

@@ -33,8 +33,26 @@ enum TownType {
 
 enum Faction {
 	NEUTRAL = -1,
-	PLAYER = 0,
-	ENEMY = 1
+	PLAYER  = 0,
+	ENEMY_A = 1,
+	ENEMY_B = 2,
+	ENEMY_C = 3,
+}
+
+const FACTION_NAMES: Dictionary = {
+	-1: "Neutral",
+	0:  "Player",
+	1:  "Vanguard",
+	2:  "Iron Pact",
+	3:  "Shadow Order",
+}
+
+const FACTION_COLORS: Dictionary = {
+	-1: Color(0.55, 0.55, 0.55),
+	0:  Color(0.20, 0.40, 0.90),
+	1:  Color(0.90, 0.20, 0.20),
+	2:  Color(0.85, 0.55, 0.10),
+	3:  Color(0.55, 0.10, 0.70),
 }
 
 enum TargetRow {

@@ -125,28 +125,34 @@ static func _find_in_region(grid: Array, _params: MapParams,
 				return Vector2i(x, z)
 	return Vector2i(-1, -1)
 
+# HQ placement quadrants: [x_min_frac, x_max_frac, z_min_frac, z_max_frac]
+const HQ_REGIONS: Dictionary = {
+	0: [0.0,   0.333, 0.667, 1.0  ],
+	1: [0.667, 1.0,   0.0,   0.333],
+	2: [0.667, 1.0,   0.667, 1.0  ],
+	3: [0.0,   0.333, 0.0,   0.333],
+}
+
 static func _place_towns(grid: Array, params: MapParams) -> Array:
 	var towns: Array = []
 	var placed: Array[Vector2i] = []
 
-	# Player HQ — bottom-left (low X, high Z)
-	var phq: Vector2i = _find_in_region(grid, params,
-		0, int(params.width * 0.333), int(params.height * 0.667), params.height, placed, 0)
-	if phq != Vector2i(-1, -1):
-		towns.append({"town_id": "player_hq", "town_type": TerrainDefs.TownType.HQ,
-			"faction": TerrainDefs.Faction.PLAYER, "grid_x": phq.x, "grid_z": phq.y})
-		placed.append(phq)
-
-	# Enemy HQ — top-right (high X, low Z)
-	var ehq: Vector2i = _find_in_region(grid, params,
-		int(params.width * 0.667), params.width, 0, int(params.height * 0.333), placed, 0)
-	if ehq != Vector2i(-1, -1):
-		towns.append({"town_id": "enemy_hq", "town_type": TerrainDefs.TownType.HQ,
-			"faction": TerrainDefs.Faction.ENEMY, "grid_x": ehq.x, "grid_z": ehq.y})
-		placed.append(ehq)
+	# Place one HQ per active faction using quadrant regions
+	for faction in params.active_factions:
+		var region: Array = HQ_REGIONS.get(faction, [0.4, 0.6, 0.4, 0.6]) as Array
+		var x0 := int(params.width  * float(region[0]))
+		var x1 := int(params.width  * float(region[1]))
+		var z0 := int(params.height * float(region[2]))
+		var z1 := int(params.height * float(region[3]))
+		var hq_pos := _find_in_region(grid, params, x0, x1, z0, z1, placed, 0)
+		if hq_pos != Vector2i(-1, -1):
+			towns.append({"town_id": "%d_hq" % faction, "town_type": TerrainDefs.TownType.HQ,
+				"faction": faction, "grid_x": hq_pos.x, "grid_z": hq_pos.y})
+			placed.append(hq_pos)
 
 	# Neutral towns and castles
-	var extra_castles: int = maxi(0, params.num_castles - 2)
+	var extra_castles: int = maxi(0, params.num_castles - int(params.active_factions.size()))
+	extra_castles = maxi(0, extra_castles)
 	var neutral_total: int = extra_castles + params.num_towns
 	var spawned: int = 0
 	var tries: int   = 0
@@ -158,12 +164,8 @@ static func _place_towns(grid: Array, params: MapParams) -> Array:
 		var pos := Vector2i(x, z)
 		if not _is_placeable(grid, x, z):
 			continue
-		if not _is_far_enough(pos, placed, 3):
-			continue
-		var hqs: Array[Vector2i] = []
-		if phq != Vector2i(-1, -1): hqs.append(phq)
-		if ehq != Vector2i(-1, -1): hqs.append(ehq)
-		if not _is_far_enough(pos, hqs, 4):
+		# HQ positions are already in `placed`; min distance 4 from any placed town/HQ
+		if not _is_far_enough(pos, placed, 4):
 			continue
 		var is_castle: bool = spawned < extra_castles
 		var tid: String = "castle_%d" % spawned if is_castle else "town_%d" % spawned
@@ -196,11 +198,12 @@ static func _flatten_town_cells(grid: Array, towns: Array) -> void:
 # ── Road pass (A*) ───────────────────────────────────────────────────────────
 
 static func _apply_roads(grid: Array, params: MapParams, towns: Array) -> void:
+	# Road connects faction-0 HQ to faction-1 HQ
 	var phq := Vector2i(-1, -1)
 	var ehq := Vector2i(-1, -1)
 	for t in towns:
-		if   t["town_id"] == "player_hq": phq = Vector2i(t["grid_x"], t["grid_z"])
-		elif t["town_id"] == "enemy_hq":  ehq = Vector2i(t["grid_x"], t["grid_z"])
+		if   t["town_id"] == "0_hq": phq = Vector2i(t["grid_x"], t["grid_z"])
+		elif t["town_id"] == "1_hq": ehq = Vector2i(t["grid_x"], t["grid_z"])
 	if phq == Vector2i(-1, -1) or ehq == Vector2i(-1, -1):
 		return
 	var path: Array[Vector2i] = _astar(grid, params, phq, ehq)

@@ -94,7 +94,4 @@ func _terrain_color(t: TerrainDefs.TerrainType) -> Color:
 		_: return Color.MAGENTA
 
 func _faction_color(f: int) -> Color:
-	match f:
-		TerrainDefs.Faction.PLAYER: return Color(0.20, 0.40, 0.90)
-		TerrainDefs.Faction.ENEMY:  return Color(1.0, 0.30, 0.30)
-		_: return Color(0.70, 0.70, 0.70)
+	return TerrainDefs.FACTION_COLORS.get(f, Color(0.70, 0.70, 0.70))

@@ -44,7 +44,7 @@ ITEM_TYPE       = {0: "passive", 1: "consumable"}
 DAMAGE_TYPE     = {0: "Physical", 1: "Fire", 2: "Cold", 3: "Thunder", 4: "Holy", 5: "Dark"}
 TARGET_ROW      = {0: "FRONT", 1: "BACK", 2: "ANY"}
 MOVE_TYPE       = {0: "Infantry", 1: "Cavalry", 2: "Flying", 3: "Aquatic"}
-FACTION         = {0: "player", 1: "enemy", -1: "neutral"}
+FACTION         = {0: "Player", 1: "Vanguard", 2: "Iron Pact", 3: "Shadow Order", -1: "Neutral"}
 
 
 # ---------------------------------------------------------------------------

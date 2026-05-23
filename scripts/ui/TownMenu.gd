@@ -66,12 +66,7 @@ func _fill_header() -> void:
 	_title_lbl.text = display + "  [" + type_str + "]"
 
 	var faction_id: int = GameState.town_ownership.get(td.town_id, TerrainDefs.Faction.NEUTRAL)
-	var faction_name: String
-	match faction_id:
-		TerrainDefs.Faction.PLAYER: faction_name = "Player"
-		TerrainDefs.Faction.ENEMY:  faction_name = "Enemy"
-		_: faction_name = "Neutral"
-	_owner_lbl.text = "Owner: " + faction_name
+	_owner_lbl.text = "Owner: " + TerrainDefs.FACTION_NAMES.get(faction_id, "Unknown")
 
 # ── Friendly body (interactive) ───────────────────────────────────────────────
 

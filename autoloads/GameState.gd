@@ -2,8 +2,10 @@ extends Node
 
 signal faction_won(faction_id: int)
 signal gold_changed(faction: int, new_total: int)
+signal faction_relation_changed(f_a: int, f_b: int, new_relation: int)
 
 enum Phase { OVERWORLD, IN_BATTLE, PAUSED, VICTORY, DEFEAT }
+enum Relation { HOSTILE, NEUTRAL_REL, ALLIED }
 
 var current_phase: Phase = Phase.OVERWORLD
 var map_seed: int = 0
@@ -11,6 +13,12 @@ var town_ownership: Dictionary = {}
 var player_squads: Array = []
 var enemy_squads: Array = []
 var reserve_squads: Array = []
+var faction_squads: Dictionary = {}   # faction_id -> Array[Squad]
+
+# Which factions exist on this map
+var active_factions: Array[int] = [0, 1]
+# Relations between faction pairs. Key: "min_max" e.g. "0_1", value: Relation int
+var faction_relations: Dictionary = {}
 
 # Which win conditions are active this run
 var active_conditions: Array[String] = ["hq_capture"]
@@ -25,7 +33,53 @@ var _gold_timer: float = 0.0
 var player_inventory: Dictionary = {}
 
 func _ready() -> void:
-	pass
+	_init_default_relations()
+
+func _init_default_relations() -> void:
+	faction_relations = {}
+	# By default all non-player factions are hostile to player and to each other
+	for i in range(active_factions.size()):
+		for j in range(i + 1, active_factions.size()):
+			set_relation(active_factions[i], active_factions[j], Relation.HOSTILE)
+
+# ── Faction Relation API ──────────────────────────────────────────────────────
+
+func get_relation(f_a: int, f_b: int) -> Relation:
+	if f_a == f_b:
+		return Relation.ALLIED
+	return faction_relations.get(_relation_key(f_a, f_b), Relation.HOSTILE) as Relation
+
+func set_relation(f_a: int, f_b: int, relation: Relation) -> void:
+	faction_relations[_relation_key(f_a, f_b)] = int(relation)
+	faction_relation_changed.emit(f_a, f_b, int(relation))
+
+func are_hostile(f_a: int, f_b: int) -> bool:
+	return get_relation(f_a, f_b) == Relation.HOSTILE
+
+func _relation_key(f_a: int, f_b: int) -> String:
+	return "%d_%d" % [mini(f_a, f_b), maxi(f_a, f_b)]
+
+# ── Squad Registry ────────────────────────────────────────────────────────────
+
+func register_squad(sq: Squad) -> void:
+	var f: int = sq.faction
+	if not faction_squads.has(f):
+		faction_squads[f] = []
+	(faction_squads[f] as Array).append(sq)
+	if f == TerrainDefs.Faction.PLAYER:
+		player_squads.append(sq)
+	else:
+		enemy_squads.append(sq)
+
+func unregister_squad(sq: Squad) -> void:
+	var f: int = sq.faction
+	if faction_squads.has(f):
+		(faction_squads[f] as Array).erase(sq)
+	player_squads.erase(sq)
+	enemy_squads.erase(sq)
+
+func get_squads_by_faction(faction: int) -> Array:
+	return faction_squads.get(faction, []) as Array
 
 func _process(delta: float) -> void:
 	if current_phase != Phase.OVERWORLD:
@@ -45,7 +99,7 @@ func _collect_income() -> void:
 		if town_owner == TerrainDefs.Faction.PLAYER:
 			player_gold += income
 			gold_changed.emit(TerrainDefs.Faction.PLAYER, player_gold)
-		elif town_owner == TerrainDefs.Faction.ENEMY:
+		elif town_owner == TerrainDefs.Faction.ENEMY_A:
 			enemy_gold += income
 
 # ── Win Condition Checks ──────────────────────────────────────────────────────
@@ -65,14 +119,31 @@ func _check_hq_capture() -> int:
 	var map_mgr := _get_map_manager()
 	if not map_mgr:
 		return -1
-	for faction in [TerrainDefs.Faction.PLAYER, TerrainDefs.Faction.ENEMY]:
-		var enemy_faction: int = TerrainDefs.Faction.ENEMY if faction == TerrainDefs.Faction.PLAYER else TerrainDefs.Faction.PLAYER
-		var enemy_hq := map_mgr.get_hq(enemy_faction)
-		if not enemy_hq:
+
+	# Player wins if all hostile-faction HQs are captured by player
+	var all_enemy_hqs_captured := true
+	for faction in active_factions:
+		if faction == TerrainDefs.Faction.PLAYER:
 			continue
-		var hq_owner: int = int(town_ownership.get(enemy_hq.town_data.town_id, enemy_hq.town_data.starting_faction))
-		if hq_owner == faction:
-			return faction
+		if not are_hostile(TerrainDefs.Faction.PLAYER, faction):
+			continue  # Allied factions don't count as targets
+		var hq := map_mgr.get_hq(faction)
+		if not hq:
+			continue
+		var hq_owner: int = int(town_ownership.get(hq.town_data.town_id, hq.town_data.starting_faction))
+		if hq_owner != TerrainDefs.Faction.PLAYER:
+			all_enemy_hqs_captured = false
+	if all_enemy_hqs_captured and active_factions.size() > 1:
+		return TerrainDefs.Faction.PLAYER
+
+	# Player loses if their HQ is captured by any hostile faction
+	var player_hq := map_mgr.get_hq(TerrainDefs.Faction.PLAYER)
+	if player_hq:
+		var player_hq_owner: int = int(town_ownership.get(
+			player_hq.town_data.town_id, player_hq.town_data.starting_faction))
+		if player_hq_owner != TerrainDefs.Faction.PLAYER:
+			return player_hq_owner
+
 	return -1
 
 func _check_all_strongholds() -> int:
@@ -82,7 +153,7 @@ func _check_all_strongholds() -> int:
 	var all_towns := map_mgr.get_towns()
 	if all_towns.is_empty():
 		return -1
-	for faction in [TerrainDefs.Faction.PLAYER, TerrainDefs.Faction.ENEMY]:
+	for faction in active_factions:
 		var owns_all := true
 		for town in all_towns:
 			var town_owner: int = int(town_ownership.get(town.town_data.town_id, town.town_data.starting_faction))
@@ -109,6 +180,9 @@ func reset() -> void:
 	player_squads = []
 	enemy_squads = []
 	reserve_squads = []
+	faction_squads = {}
+	active_factions = [0, 1]
+	faction_relations = {}
 	active_conditions = ["hq_capture"]
 	pending_map_params = null
 	configured_squads = []
@@ -116,6 +190,7 @@ func reset() -> void:
 	enemy_gold = 100
 	_gold_timer = 0.0
 	player_inventory = {}
+	_init_default_relations()
 
 func _get_map_manager() -> MapManager:
 	var scene := get_tree().current_scene

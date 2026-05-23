@@ -11,4 +11,5 @@ extends Resource
 @export var forest_coverage: float = 0.20
 
 @export var num_towns: int = 6
-@export var num_castles: int = 2   # includes the 2 HQs (player + enemy)
+@export var num_castles: int = 2   # includes the HQs
+@export var active_factions: Array[int] = [0, 1]

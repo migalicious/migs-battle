@@ -227,15 +227,11 @@ func _update_terrain_speed() -> void:
 	squad_data.recalculate_speed(terrain)
 
 func _faction_color(f: int) -> Color:
-	if f == TerrainDefs.Faction.PLAYER:
-		return Color(0.20, 0.40, 0.90)
-	if f == TerrainDefs.Faction.ENEMY:
-		return Color(1.0, 0.2, 0.2)
-	return Color.WHITE
+	return TerrainDefs.FACTION_COLORS.get(f, Color.WHITE)
 
 func _on_area_entered(area: Area3D) -> void:
 	if in_battle:
 		return
 	var other := area.get_parent() as Squad
-	if other and other.faction != faction and not other.in_battle:
+	if other and GameState.are_hostile(faction, other.faction) and not other.in_battle:
 		squad_collided_with_enemy.emit(self, other)

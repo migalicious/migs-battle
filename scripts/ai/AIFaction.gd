@@ -7,6 +7,8 @@ const THREAT_RADIUS: float = 12.0
 
 const _SQUAD_SCENE := preload("res://scenes/squads/Squad.tscn")
 
+@export var controlled_faction: int = TerrainDefs.Faction.ENEMY_A
+
 var tick_timer: float = 0.0
 
 var _map_manager: MapManager = null
@@ -32,23 +34,22 @@ func _process(delta: float) -> void:
 # ── Spawning ──────────────────────────────────────────────────────────────────
 
 func _initial_spawn() -> void:
-	var spawn_points := _map_manager.get_towns_by_faction(TerrainDefs.Faction.ENEMY)
+	var spawn_points := _map_manager.get_towns_by_faction(controlled_faction)
 	var count := mini(spawn_points.size(), MAX_AI_SQUADS)
 	for i in range(count):
 		var town: TownNode = spawn_points[i]
 		var data := _build_template(i)
-		data.squad_id = "ai_%d" % i
+		data.squad_id = "ai_%d_%d" % [controlled_faction, i]
 		var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
 		_squad_controller.add_child(sq)
 		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
 		sq.setup(data)
 		_squad_controller.wire_squad(sq)
-		GameState.enemy_squads.append(sq)
 
 # ── Tick Loop ─────────────────────────────────────────────────────────────────
 
 func _run_ai_tick() -> void:
-	for sq in GameState.enemy_squads:
+	for sq in GameState.get_squads_by_faction(controlled_faction):
 		if not is_instance_valid(sq):
 			continue
 		if sq.in_battle or sq.is_garrisoned:
@@ -58,7 +59,7 @@ func _run_ai_tick() -> void:
 
 func _assign_objective(squad: Squad) -> Dictionary:
 	if _hq_under_threat():
-		var hq := _map_manager.get_hq(TerrainDefs.Faction.ENEMY)
+		var hq := _map_manager.get_hq(controlled_faction)
 		if hq:
 			return {"type": "defend", "target": hq}
 
@@ -70,9 +71,10 @@ func _assign_objective(squad: Squad) -> Dictionary:
 	if neutral:
 		return {"type": "capture", "target": neutral}
 
-	var player_town := _find_nearest_town_with_faction(squad.global_position, TerrainDefs.Faction.PLAYER)
-	if player_town:
-		return {"type": "attack", "target": player_town}
+	# Attack the nearest hostile faction's town
+	var hostile_town := _find_nearest_hostile_town(squad.global_position)
+	if hostile_town:
+		return {"type": "attack", "target": hostile_town}
 
 	return {"type": "patrol", "target": _find_patrol_target(squad)}
 
@@ -80,7 +82,6 @@ func _execute_objective(squad: Squad, objective: Dictionary) -> void:
 	var target: Node = objective["target"] as Node
 	if not is_instance_valid(target):
 		return
-	# Offset slightly so multiple squads converging on the same town don't stack
 	var base_pos: Vector3 = target.global_position
 	var jitter := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
 	squad.set_destination(base_pos + jitter)
@@ -88,20 +89,23 @@ func _execute_objective(squad: Squad, objective: Dictionary) -> void:
 # ── Threat Detection ──────────────────────────────────────────────────────────
 
 func _hq_under_threat() -> bool:
-	var hq := _map_manager.get_hq(TerrainDefs.Faction.ENEMY)
+	var hq := _map_manager.get_hq(controlled_faction)
 	if not hq:
 		return false
-	for sq in GameState.player_squads:
-		if is_instance_valid(sq) and sq.global_position.distance_to(hq.global_position) < THREAT_RADIUS:
-			return true
+	for faction in GameState.active_factions:
+		if not GameState.are_hostile(controlled_faction, faction):
+			continue
+		for sq in GameState.get_squads_by_faction(faction):
+			if is_instance_valid(sq) and sq.global_position.distance_to(hq.global_position) < THREAT_RADIUS:
+				return true
 	return false
 
 # ── Town Finders ──────────────────────────────────────────────────────────────
 
 func _find_recently_lost_town() -> TownNode:
 	for town in _map_manager.get_towns():
-		if town.town_data.starting_faction == TerrainDefs.Faction.ENEMY \
-		   and town.faction != TerrainDefs.Faction.ENEMY:
+		if town.town_data.starting_faction == controlled_faction \
+		   and town.faction != controlled_faction:
 			return town
 	return null
 
@@ -116,14 +120,24 @@ func _find_nearest_town_with_faction(from: Vector3, faction: int) -> TownNode:
 				nearest = town
 	return nearest
 
+func _find_nearest_hostile_town(from: Vector3) -> TownNode:
+	var nearest: TownNode = null
+	var nearest_dist := INF
+	for town in _map_manager.get_towns():
+		if GameState.are_hostile(controlled_faction, town.faction):
+			var dist := from.distance_to(town.global_position)
+			if dist < nearest_dist:
+				nearest_dist = dist
+				nearest = town
+	return nearest
+
 func _find_patrol_target(_squad: Squad) -> TownNode:
-	var friendly := _map_manager.get_towns_by_faction(TerrainDefs.Faction.ENEMY)
+	var friendly := _map_manager.get_towns_by_faction(controlled_faction)
 	if not friendly.is_empty():
 		return friendly[randi() % friendly.size()]
-	var hq := _map_manager.get_hq(TerrainDefs.Faction.ENEMY)
+	var hq := _map_manager.get_hq(controlled_faction)
 	if hq:
 		return hq
-	# Fallback: any town
 	var all_towns := _map_manager.get_towns()
 	if not all_towns.is_empty():
 		return all_towns[randi() % all_towns.size()]
@@ -140,7 +154,7 @@ func _build_template(template_idx: int) -> SquadData:
 
 func _template_a() -> SquadData:
 	var d := SquadData.new()
-	d.faction = TerrainDefs.Faction.ENEMY
+	d.faction = controlled_faction
 	_add(d, "knight",  "Commander",  0, 0, true,  5)
 	_add(d, "fighter", "Soldier",    0, 1, false, 3)
 	_add(d, "fighter", "Grunt",      0, 2, false, 3)
@@ -150,7 +164,7 @@ func _template_a() -> SquadData:
 
 func _template_b() -> SquadData:
 	var d := SquadData.new()
-	d.faction = TerrainDefs.Faction.ENEMY
+	d.faction = controlled_faction
 	_add(d, "knight", "Dark Knight",  0, 0, true,  5)
 	_add(d, "knight", "Iron Guard",   0, 1, false, 5)
 	_add(d, "mage",   "Shadow Mage",  1, 0, false, 4)
@@ -159,7 +173,7 @@ func _template_b() -> SquadData:
 
 func _template_c() -> SquadData:
 	var d := SquadData.new()
-	d.faction = TerrainDefs.Faction.ENEMY
+	d.faction = controlled_faction
 	_add(d, "paladin", "Paladin Lord",  0, 0, true,  8)
 	_add(d, "knight",  "Heavy Knight",  0, 1, false, 6)
 	_add(d, "knight",  "Iron Guard",    0, 2, false, 6)
@@ -169,7 +183,7 @@ func _template_c() -> SquadData:
 
 func _template_d() -> SquadData:
 	var d := SquadData.new()
-	d.faction = TerrainDefs.Faction.ENEMY
+	d.faction = controlled_faction
 	_add(d, "cavalry", "Scout Captain", 0, 0, true,  4)
 	_add(d, "cavalry", "Rider",         0, 1, false, 4)
 	_add(d, "archer",  "Marksman",      1, 0, false, 3)
@@ -182,6 +196,6 @@ func _add(data: SquadData, class_id: String, uname: String, row: int, col: int, 
 	unit.unit_name = uname
 	unit.row = row
 	unit.col = col
-	unit.faction = TerrainDefs.Faction.ENEMY
+	unit.faction = controlled_faction
 	unit.is_leader = is_leader
 	data.units.append(unit)

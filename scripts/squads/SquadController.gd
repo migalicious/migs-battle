@@ -52,7 +52,6 @@ func _spawn_player_squads() -> void:
 			sq.global_position = Vector3(base_pos.x, 0.5, base_pos.z + 2.5)
 			sq.setup(data)
 			wire_squad(sq)
-			GameState.player_squads.append(sq)
 		else:
 			GameState.reserve_squads.append(data)
 
@@ -60,6 +59,7 @@ func wire_squad(sq: Squad) -> void:
 	sq.map_manager = _map_manager
 	sq.squad_collided_with_enemy.connect(_on_squads_collided)
 	sq.squad_arrived.connect(_on_squad_arrived)
+	GameState.register_squad(sq)
 
 # ── Squad Data Builders ───────────────────────────────────────────────────────
 
@@ -125,15 +125,20 @@ func _handle_squad_at_town(squad: Squad, town: TownNode) -> void:
 		town.town_data.town_id, TerrainDefs.Faction.NEUTRAL)
 
 	if town_faction == squad.faction:
-		# Friendly town: only player squads garrison (AI squads keep moving)
+		# Own town: player garrisons, AI squads pass through
 		if squad.faction == TerrainDefs.Faction.PLAYER:
 			squad.garrison_at(town)
 			town.set_garrison(squad)
-	elif is_instance_valid(town.garrisoned_squad) and town.garrisoned_squad.faction != squad.faction:
-		# Enemy garrison present: trigger battle
+	elif is_instance_valid(town.garrisoned_squad) \
+			and GameState.are_hostile(squad.faction, town.garrisoned_squad.faction):
+		# Hostile garrison: trigger battle
 		_on_squads_collided(squad, town.garrisoned_squad)
+	elif town_faction != TerrainDefs.Faction.NEUTRAL \
+			and not GameState.are_hostile(squad.faction, town_faction):
+		# Allied faction town: pass through without capturing
+		pass
 	else:
-		# Neutral or undefended enemy: begin capture
+		# Neutral or hostile undefended town: begin capture
 		town.begin_capture(squad)
 
 # ── Deploy Reserve Squad ──────────────────────────────────────────────────────
@@ -176,7 +181,6 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 	sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 1.5)
 	sq.setup(squad_data)
 	wire_squad(sq)
-	GameState.player_squads.append(sq)
 
 # ── Ungarrison ────────────────────────────────────────────────────────────────
 
