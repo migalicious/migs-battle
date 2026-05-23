@@ -30,7 +30,10 @@ func _init_refs() -> void:
 # ── Spawning ──────────────────────────────────────────────────────────────────
 
 func _spawn_squads() -> void:
-	_spawn_player_squads()
+	if GameState.is_loading_save:
+		_restore_player_squads()
+	else:
+		_spawn_player_squads()
 	# Enemy squads are spawned by AIFaction._setup()
 
 func _spawn_player_squads() -> void:
@@ -54,6 +57,34 @@ func _spawn_player_squads() -> void:
 			wire_squad(sq)
 		else:
 			GameState.reserve_squads.append(data)
+
+func _restore_player_squads() -> void:
+	var save_data: Dictionary = GameState.save_squad_data
+	var hq := _map_manager.get_hq(TerrainDefs.Faction.PLAYER)
+	var fallback_pos := Vector3.ZERO
+	if hq:
+		fallback_pos = hq.global_position
+
+	for d in save_data.get("active", []):
+		var sd := SaveSystem.deserialize_squad(d)
+		sd.faction = TerrainDefs.Faction.PLAYER
+		var world_pos := fallback_pos
+		var gx: int = d.get("grid_x", -1)
+		var gz: int = d.get("grid_z", -1)
+		if gx >= 0 and gz >= 0:
+			world_pos = _map_manager.grid_to_world(Vector2i(gx, gz))
+		var sq: Squad = _SQUAD_SCENE.instantiate()
+		add_child(sq)
+		sq.global_position = Vector3(world_pos.x, 0.5, world_pos.z)
+		sq.setup(sd)
+		wire_squad(sq)
+
+	for d in save_data.get("reserve", []):
+		var sd := SaveSystem.deserialize_squad(d)
+		sd.faction = TerrainDefs.Faction.PLAYER
+		GameState.reserve_squads.append(sd)
+
+	GameState.is_loading_save = false
 
 func wire_squad(sq: Squad) -> void:
 	sq.map_manager = _map_manager

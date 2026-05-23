@@ -50,6 +50,13 @@ func _build_ui() -> void:
 	_gold_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right_box.add_child(_gold_lbl)
 
+	var save_btn := Button.new()
+	save_btn.name = "SaveBtn"
+	save_btn.text = "Save"
+	save_btn.custom_minimum_size = Vector2(54, 0)
+	save_btn.pressed.connect(_on_save_pressed)
+	right_box.add_child(save_btn)
+
 	var pause_btn := Button.new()
 	pause_btn.text = "Pause"
 	pause_btn.custom_minimum_size = Vector2(64, 0)
@@ -78,6 +85,10 @@ func _on_gold_changed(faction: int, amount: int) -> void:
 	var tween := create_tween()
 	tween.tween_property(_gold_lbl, "modulate", Color(1.0, 0.85, 0.1), 0.15)
 	tween.tween_property(_gold_lbl, "modulate", Color.WHITE, 0.3)
+
+func _on_save_pressed() -> void:
+	if get_tree().paused and GameState.current_phase == GameState.Phase.OVERWORLD:
+		SaveSystem.save()
 
 func _on_pause_pressed() -> void:
 	if GameState.current_phase != GameState.Phase.OVERWORLD:

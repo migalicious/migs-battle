@@ -25,6 +25,10 @@ var active_conditions: Array[String] = ["hq_capture"]
 
 var pending_map_params: MapParams = null
 var configured_squads: Array[SquadData] = []
+var last_map_params: MapParams = null
+
+var is_loading_save: bool = false
+var save_squad_data: Dictionary = {}
 
 var player_gold: int = 100
 var enemy_gold: int = 100
@@ -186,6 +190,9 @@ func reset() -> void:
 	active_conditions = ["hq_capture"]
 	pending_map_params = null
 	configured_squads = []
+	last_map_params = null
+	is_loading_save = false
+	save_squad_data = {}
 	player_gold = 100
 	enemy_gold = 100
 	_gold_timer = 0.0

@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://main"]
+[gd_scene load_steps=12 format=3 uid="uid://main"]
 
 [ext_resource type="PackedScene" path="res://scenes/map/MapManager.tscn" id="1_map"]
 [ext_resource type="Script" path="res://scripts/ui/CameraController.gd" id="2_cam"]
@@ -6,12 +6,14 @@
 [ext_resource type="PackedScene" path="res://scenes/squads/SquadInspector.tscn" id="4_insp"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TownMenu.tscn" id="5_tmenu"]
 [ext_resource type="Script" path="res://scripts/ai/AIFaction.gd" id="6_ai"]
+[ext_resource type="Script" path="res://scripts/main/Main.gd" id="11_main"]
 [ext_resource type="PackedScene" path="res://scenes/ui/VictoryScreen.tscn" id="7_vs"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TopBar.tscn" id="8_topbar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/MinimapPanel.tscn" id="9_mm"]
 [ext_resource type="PackedScene" path="res://scenes/ui/UnitDetailPopup.tscn" id="10_udp"]
 
 [node name="Main" type="Node3D"]
+script = ExtResource("11_main")
 
 [node name="MapManager" parent="." instance=ExtResource("1_map")]
 

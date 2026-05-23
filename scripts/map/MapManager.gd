@@ -38,6 +38,8 @@ func _ready() -> void:
 	towns_node.name = "TownNodes"
 	add_child(towns_node)
 
+	GameState.last_map_params = _params
+
 	var result := MapGenerator.generate(_params)
 	_terrain_grid = result["terrain"]
 	GameState.map_seed = result["seed"]
@@ -50,6 +52,8 @@ func _ready() -> void:
 	_init_cell_array()
 	_spawn_cells(cells_node)
 	_spawn_towns(towns_node, result["towns"])
+	if GameState.is_loading_save:
+		_restore_town_factions()
 	_build_navmesh()
 
 # ── Spawning ──────────────────────────────────────────────────────────────────
@@ -94,7 +98,8 @@ func _spawn_towns(container: Node3D, defs: Array) -> void:
 		town.setup(data, base_y)
 		_towns.append(town)
 
-		GameState.town_ownership[data.town_id] = data.starting_faction
+		if not GameState.is_loading_save:
+			GameState.town_ownership[data.town_id] = data.starting_faction
 
 # ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -174,6 +179,21 @@ func get_hq(faction: int) -> TownNode:
 		if t.town_data and t.town_data.town_type == TerrainDefs.TownType.HQ and t.town_data.starting_faction == faction:
 			return t
 	return null
+
+func _restore_town_factions() -> void:
+	for town in _towns:
+		var saved_faction: int = GameState.town_ownership.get(
+			town.town_data.town_id, town.town_data.starting_faction)
+		town.faction = saved_faction
+		_tween_town_colors(town, saved_faction)
+
+func _tween_town_colors(town: TownNode, new_faction: int) -> void:
+	if town._base_mat:
+		town._base_mat.albedo_color = TerrainDefs.FACTION_COLORS.get(new_faction, Color(0.55, 0.55, 0.55))
+	if town._tower_mat:
+		town._tower_mat.albedo_color = TerrainDefs.FACTION_COLORS.get(new_faction, Color(0.55, 0.55, 0.55)).darkened(0.15)
+	if town._flag_mat:
+		town._flag_mat.albedo_color = TerrainDefs.FACTION_COLORS.get(new_faction, Color(0.55, 0.55, 0.55))
 
 func _income_for_type(t: TerrainDefs.TownType) -> int:
 	match t:

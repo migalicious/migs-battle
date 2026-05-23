@@ -9,8 +9,10 @@ func start_new_game() -> void:
 		screen.config_ready.connect(_on_config_ready, CONNECT_ONE_SHOT)
 		screen.back_requested.connect(_on_back_requested, CONNECT_ONE_SHOT)
 
-func _on_config_ready(params: MapParams, win_conditions: Array[String]) -> void:
+func _on_config_ready(params: MapParams, win_conditions: Array[String], active_factions: Array[int]) -> void:
 	GameState.active_conditions = win_conditions
+	GameState.active_factions = active_factions
+	GameState._init_default_relations()
 	GameState.pending_map_params = params
 	get_tree().change_scene_to_file("res://scenes/ui/ArmyBuilderScreen.tscn")
 	await get_tree().process_frame

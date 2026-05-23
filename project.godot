@@ -30,6 +30,7 @@ BattleManager="*res://autoloads/BattleManager.gd"
 GameState="*res://autoloads/GameState.gd"
 GameSetupManager="*res://scripts/ui/GameSetupManager.gd"
 DebugServer="*res://autoloads/DebugServer.gd"
+SaveSystem="*res://autoloads/SaveSystem.gd"
 
 [physics]
 

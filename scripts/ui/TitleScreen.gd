@@ -14,12 +14,23 @@ func _ready() -> void:
 	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER | Control.SIZE_EXPAND
 	vbox.add_child(title)
 
-	var btn := Button.new()
-	btn.text = "New Game"
-	btn.custom_minimum_size = Vector2(200, 52)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn.pressed.connect(_on_new_game)
-	vbox.add_child(btn)
+	var new_btn := Button.new()
+	new_btn.text = "New Game"
+	new_btn.custom_minimum_size = Vector2(200, 52)
+	new_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	new_btn.pressed.connect(_on_new_game)
+	vbox.add_child(new_btn)
+
+	var cont_btn := Button.new()
+	cont_btn.text = "Continue"
+	cont_btn.custom_minimum_size = Vector2(200, 52)
+	cont_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cont_btn.disabled = not SaveSystem.load_exists()
+	cont_btn.pressed.connect(_on_continue)
+	vbox.add_child(cont_btn)
 
 func _on_new_game() -> void:
 	GameSetupManager.start_new_game()
+
+func _on_continue() -> void:
+	SaveSystem.load_game()

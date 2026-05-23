@@ -1,7 +1,7 @@
 class_name MapConfigScreen
 extends Control
 
-signal config_ready(params: MapParams, win_conditions: Array[String])
+signal config_ready(params: MapParams, win_conditions: Array[String], active_factions: Array[int])
 signal back_requested()
 
 const CONFIG_PATH := "user://map_config.cfg"
@@ -15,6 +15,7 @@ var _castles_value: Label = null
 var _win_option: OptionButton = null
 var _last_seed_lbl: Label = null
 var _replay_btn: Button = null
+var _factions_option: OptionButton = null
 
 var _last_seed: int = 0
 
@@ -32,8 +33,8 @@ func _build_ui() -> void:
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left  = -260.0
 	panel.offset_right =  260.0
-	panel.offset_top   = -260.0
-	panel.offset_bottom = 260.0
+	panel.offset_top   = -300.0
+	panel.offset_bottom = 300.0
 	add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -92,6 +93,16 @@ func _build_ui() -> void:
 	_castles_value.custom_minimum_size = Vector2(22, 0)
 	castles_row.add_child(_castles_value)
 	_castles_slider.value_changed.connect(func(v: float) -> void: _castles_value.text = str(int(v)))
+
+	# Number of Factions
+	vbox.add_child(_make_label("Number of Factions"))
+	_factions_option = OptionButton.new()
+	_factions_option.name = "FactionsOption"
+	_factions_option.add_item("2  (Player vs Vanguard)")
+	_factions_option.add_item("3  (+ Iron Pact)")
+	_factions_option.add_item("4  (+ Shadow Order)")
+	_factions_option.selected = 0
+	vbox.add_child(_factions_option)
 
 	# Win Condition
 	vbox.add_child(_make_label("Win Condition"))
@@ -167,7 +178,16 @@ func _on_generate_pressed() -> void:
 	params.map_seed    = int(_seed_field.text) if _seed_field.text.is_valid_int() else 0
 	params.num_towns   = int(_towns_slider.value)
 	params.num_castles = int(_castles_slider.value)
-	config_ready.emit(params, _get_win_conditions())
+	params.active_factions = _faction_count_to_array(_factions_option.selected + 2)
+	config_ready.emit(params, _get_win_conditions(), params.active_factions)
+
+func _faction_count_to_array(count: int) -> Array[int]:
+	var result: Array[int] = [0, 1]
+	if count >= 3:
+		result.append(2)
+	if count >= 4:
+		result.append(3)
+	return result
 
 func _get_win_conditions() -> Array[String]:
 	match _win_option.selected:

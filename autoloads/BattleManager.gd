@@ -57,6 +57,8 @@ func _on_battle_completed(scene: BattleAnimator) -> void:
 	battle_ended.emit(_current_result)
 	# Check win conditions now that phase is OVERWORLD (trigger_end will re-pause if needed)
 	GameState.check_win_conditions()
+	if GameState.current_phase == GameState.Phase.OVERWORLD:
+		SaveSystem.save()
 
 # ── Result Application ────────────────────────────────────────────────────────
 
@@ -113,10 +115,7 @@ func _handle_loser(squad: Squad) -> void:
 	if nearest and not alive.is_empty():
 		squad.retreat_to(nearest.global_position)
 		squad.in_battle = false
-		if squad.faction == TerrainDefs.Faction.PLAYER:
-			GameState.player_squads.append(squad)
-		else:
-			GameState.enemy_squads.append(squad)
+		GameState.register_squad(squad)
 	else:
 		squad.queue_free()
 
