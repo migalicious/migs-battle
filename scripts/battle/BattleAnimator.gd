@@ -185,6 +185,19 @@ func _process_action(action: BattleAction) -> void:
 				_show_damage_number(box, str(action.damage_dealt), Color(1.0, 0.1, 0.1))
 				_update_hp(box, -action.damage_dealt)
 				_grey_out_slot(box)
+		BattleAction.ActionType.SKILL:
+			_log_line("[color=orange]%s — %s hits %s for %d![/color]" % [
+				action.actor_unit_id, action.attack_name, action.target_unit_id, action.damage_dealt])
+			if box:
+				_show_damage_number(box, str(action.damage_dealt), Color(1.0, 0.6, 0.0))
+				_update_hp(box, -action.damage_dealt)
+		BattleAction.ActionType.HEAL:
+			_log_line("[color=green]%s — %s restores %d HP to %s![/color]" % [
+				action.actor_unit_id, action.attack_name, action.damage_dealt, action.target_unit_id])
+			var heal_box: ColorRect = all_slots.get(action.target_unit_id, null) as ColorRect
+			if heal_box:
+				_show_damage_number(heal_box, "+%d" % action.damage_dealt, Color(0.2, 1.0, 0.3))
+				_update_hp(heal_box, action.damage_dealt)
 		_:
 			pass
 

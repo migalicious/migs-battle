@@ -1,22 +1,32 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_hmard"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_uxh0p"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_m4fc0"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_uxh0p"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_m4fc0"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_ooalj"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_db80b"]
 
-[sub_resource type="Resource" id="Resource_ooalj"]
-script = ExtResource("1_hmard")
+[sub_resource type="Resource" id="Resource_3y7iy"]
+script = ExtResource("1_uxh0p")
 attack_name = "Slash"
 power_multiplier = 0.8
 
-[sub_resource type="Resource" id="Resource_db80b"]
-script = ExtResource("1_hmard")
+[sub_resource type="Resource" id="Resource_gfu2g"]
+script = ExtResource("1_uxh0p")
 attack_name = "Lance Charge"
 hits = 2
 power_multiplier = 1.3
 
+[sub_resource type="Resource" id="Resource_qnmif"]
+script = ExtResource("4_db80b")
+skill_id = "momentum"
+display_name = "Momentum"
+description = "50% more damage on the charge."
+condition = 3
+effect = 1
+power = 1.5
+
 [resource]
-script = ExtResource("3_m4fc0")
+script = ExtResource("3_ooalj")
 class_id = "cavalry"
 display_name = "Cavalry"
 placeholder_color = Color(0.82, 0.72, 0.55, 1)
@@ -34,5 +44,6 @@ movement_type = 1
 base_move_speed = 4.5
 can_lead = true
 deploy_cost = 100
-front_attacks = Array[ExtResource("1_hmard")]([SubResource("Resource_db80b")])
-back_attacks = Array[ExtResource("1_hmard")]([SubResource("Resource_ooalj")])
+front_attacks = Array[ExtResource("1_uxh0p")]([SubResource("Resource_gfu2g")])
+back_attacks = Array[ExtResource("1_uxh0p")]([SubResource("Resource_3y7iy")])
+skills = [SubResource("Resource_qnmif")]

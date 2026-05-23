@@ -1,24 +1,33 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_5cok1"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_lklp5"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_37qb2"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_lklp5"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_37qb2"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_nw761"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_xbyn3"]
 
-[sub_resource type="Resource" id="Resource_nw761"]
-script = ExtResource("1_5cok1")
+[sub_resource type="Resource" id="Resource_yjmyj"]
+script = ExtResource("1_lklp5")
 attack_name = "Arcane Blast"
 damage_type = 5
 hits = 2
 power_multiplier = 1.5
 hits_all_in_column = true
 
-[sub_resource type="Resource" id="Resource_xbyn3"]
-script = ExtResource("1_5cok1")
+[sub_resource type="Resource" id="Resource_7mkys"]
+script = ExtResource("1_lklp5")
 attack_name = "Staff"
 power_multiplier = 0.6
 
+[sub_resource type="Resource" id="Resource_ht47m"]
+script = ExtResource("4_xbyn3")
+skill_id = "drain_life"
+display_name = "Drain Life"
+description = "Restores 8% HP after each attack."
+effect = 2
+heal_percent = 0.08
+
 [resource]
-script = ExtResource("3_37qb2")
+script = ExtResource("3_nw761")
 class_id = "sorcerer"
 display_name = "Sorcerer"
 placeholder_color = Color(0.35, 0.1, 0.5, 1)
@@ -33,5 +42,6 @@ def_growth = Vector2i(1, 2)
 res_growth = Vector2i(4, 5)
 can_lead = true
 deploy_cost = 120
-front_attacks = Array[ExtResource("1_5cok1")]([SubResource("Resource_xbyn3")])
-back_attacks = Array[ExtResource("1_5cok1")]([SubResource("Resource_nw761")])
+front_attacks = Array[ExtResource("1_lklp5")]([SubResource("Resource_7mkys")])
+back_attacks = Array[ExtResource("1_lklp5")]([SubResource("Resource_yjmyj")])
+skills = [SubResource("Resource_ht47m")]

@@ -3,6 +3,7 @@ extends RefCounted
 
 const ROUNDS: int = 3
 const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
+const _SkillDef = preload("res://scripts/battle/SkillDefinition.gd")
 
 static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 	var result := BattleResult.new()
@@ -15,10 +16,10 @@ static func resolve(attacker: SquadData, defender: SquadData) -> BattleResult:
 
 	_apply_consumables(atk_units, def_units)
 
-	for _round in range(ROUNDS):
+	for round_num in range(ROUNDS):
 		if _all_dead(atk_units) or _all_dead(def_units):
 			break
-		_run_round(atk_units, def_units, battle_log)
+		_run_round(atk_units, def_units, battle_log, round_num + 1)
 
 	result.action_log = battle_log
 	result.attacker_unit_states = atk_units
@@ -79,7 +80,8 @@ static func _avg_level(units: Array[UnitData]) -> float:
 		total += u.level
 	return float(total) / float(units.size())
 
-static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData], battle_log: Array[BattleAction]) -> void:
+static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData],
+		battle_log: Array[BattleAction], round_num: int) -> void:
 	# Initiative queue sorted by agility descending
 	var queue: Array = []
 	for u in atk_units:
@@ -95,26 +97,38 @@ static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData], b
 		if not unit.is_alive:
 			continue
 		var enemies: Array[UnitData] = def_units if entry["side"] == 0 else atk_units
+		var allies: Array[UnitData]  = atk_units if entry["side"] == 0 else def_units
 		if _all_dead(enemies):
 			break
-		_execute_attacks(unit, enemies, battle_log)
+		_execute_attacks(unit, enemies, allies, battle_log, round_num)
 
-static func _execute_attacks(unit: UnitData, enemies: Array[UnitData], battle_log: Array[BattleAction]) -> void:
+static func _execute_attacks(unit: UnitData, enemies: Array[UnitData], allies: Array[UnitData],
+		battle_log: Array[BattleAction], round_num: int) -> void:
 	var cls: ClassDefinition = UnitRegistry.get_class_def(unit.class_id)
 	if not cls:
 		return
 	var attacks: Array = cls.front_attacks if unit.row == 0 else cls.back_attacks
+	var context := _build_context(unit, allies, enemies, round_num)
+
+	var dmg_mult := 1.0
+	for skill in cls.skills:
+		if skill.effect == _SkillDef.SkillEffect.DAMAGE_MULTIPLIER:
+			if SkillSystem.condition_met(skill, unit, context):
+				dmg_mult *= skill.power
+
 	for atk in attacks:
 		var atk_def := atk as AttackDefinition
-		if not SkillSystem.can_use_attack(unit, atk_def, {}):
+		if not SkillSystem.can_use_attack(unit, atk_def, context):
 			continue
 		var targets: Array[UnitData] = _select_targets(atk_def, enemies)
 		for _hit in range(atk_def.hits):
 			for target in targets:
 				if not target.is_alive:
 					continue
-				var dmg := _calculate_damage(unit, target, atk_def)
+				var dmg := _calculate_damage(unit, target, atk_def, dmg_mult)
+				dmg = _apply_guard(target, dmg)
 				_apply_damage(unit, target, dmg, atk_def, battle_log)
+				_fire_post_attack_skills(unit, target, allies, enemies, context, battle_log)
 
 static func _select_targets(atk_def: AttackDefinition, enemies: Array[UnitData]) -> Array[UnitData]:
 	var alive_front: Array[UnitData] = []
@@ -182,7 +196,119 @@ static func _apply_consumables(atk_units: Array[UnitData], def_units: Array[Unit
 			u.hp = mini(u.max_hp, u.hp + int(float(u.max_hp) * item.heal_percent))
 		u.held_item = ""
 
-static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: AttackDefinition) -> int:
+static func _build_context(actor: UnitData, allies: Array[UnitData],
+		enemies: Array[UnitData], round_num: int) -> Dictionary:
+	var alive_allies := 0
+	for u in allies:
+		if u.is_alive:
+			alive_allies += 1
+	var front_alive := 0
+	for u in enemies:
+		if u.is_alive and u.row == 0:
+			front_alive += 1
+	return {
+		"round": round_num,
+		"total_rounds": ROUNDS,
+		"hp_fraction": float(actor.hp) / float(maxi(actor.max_hp, 1)),
+		"ally_dead": alive_allies < allies.size(),
+		"enemy_front_empty": front_alive == 0,
+	}
+
+static func _apply_guard(target: UnitData, dmg: int) -> int:
+	if dmg <= 0:
+		return dmg
+	var cls := UnitRegistry.get_class_def(target.class_id) as ClassDefinition
+	if not cls:
+		return dmg
+	var ctx := {"hp_fraction": float(target.hp) / float(maxi(target.max_hp, 1)),
+			"round": 0, "ally_dead": false, "enemy_front_empty": false}
+	for skill in cls.skills:
+		if skill.effect == _SkillDef.SkillEffect.GUARD:
+			if SkillSystem.condition_met(skill, target, ctx):
+				dmg = maxi(1, int(float(dmg) * (1.0 - skill.damage_reduction)))
+	return dmg
+
+static func _fire_post_attack_skills(actor: UnitData, target: UnitData,
+		allies: Array[UnitData], _enemies: Array[UnitData],
+		context: Dictionary, battle_log: Array[BattleAction]) -> void:
+	var cls := UnitRegistry.get_class_def(actor.class_id) as ClassDefinition
+	if not cls:
+		return
+	for skill in cls.skills:
+		if not SkillSystem.condition_met(skill, actor, context):
+			continue
+		var eff: int = skill.effect
+		if eff == _SkillDef.SkillEffect.BONUS_DAMAGE:
+			var bdmg := maxi(1, int(_get_stat(actor, "strength") * skill.power))
+			_apply_skill_hit(actor, target, bdmg, skill.display_name, battle_log)
+		elif eff == _SkillDef.SkillEffect.HEAL_SELF:
+			var heal := maxi(1, int(float(actor.max_hp) * skill.heal_percent))
+			actor.hp = mini(actor.max_hp, actor.hp + heal)
+			_log_heal(actor, actor, heal, skill.display_name, battle_log)
+		elif eff == _SkillDef.SkillEffect.HEAL_ALLY:
+			var lowest := _find_lowest_hp_ally(allies)
+			if lowest:
+				var heal := maxi(1, int(float(lowest.max_hp) * skill.heal_percent))
+				lowest.hp = mini(lowest.max_hp, lowest.hp + heal)
+				_log_heal(actor, lowest, heal, skill.display_name, battle_log)
+		elif eff == _SkillDef.SkillEffect.EXTRA_ATTACK:
+			if target.is_alive:
+				var extra := _calculate_damage(actor, target, _make_skill_atk(skill))
+				extra = _apply_guard(target, extra)
+				_apply_skill_hit(actor, target, extra, skill.display_name, battle_log)
+
+static func _apply_skill_hit(actor: UnitData, target: UnitData, dmg: int,
+		skill_name: String, battle_log: Array[BattleAction]) -> void:
+	var action := BattleAction.new()
+	action.actor_unit_id = actor.unit_name
+	action.target_unit_id = target.unit_name
+	action.attack_name = skill_name
+	if dmg <= 0:
+		action.action_type = BattleAction.ActionType.MISS
+		action.damage_dealt = 0
+	else:
+		target.hp -= dmg
+		action.damage_dealt = dmg
+		if target.hp <= 0:
+			target.hp = 0
+			target.is_alive = false
+			action.action_type = BattleAction.ActionType.KILL
+		else:
+			action.action_type = BattleAction.ActionType.SKILL
+	battle_log.append(action)
+
+static func _log_heal(actor: UnitData, target: UnitData, amount: int,
+		skill_name: String, battle_log: Array[BattleAction]) -> void:
+	var action := BattleAction.new()
+	action.action_type = BattleAction.ActionType.HEAL
+	action.actor_unit_id = actor.unit_name
+	action.target_unit_id = target.unit_name
+	action.attack_name = skill_name
+	action.damage_dealt = amount
+	battle_log.append(action)
+
+static func _find_lowest_hp_ally(allies: Array[UnitData]) -> UnitData:
+	var lowest: UnitData = null
+	var lowest_frac := 1.1
+	for u in allies:
+		if not u.is_alive:
+			continue
+		var frac := float(u.hp) / float(maxi(u.max_hp, 1))
+		if frac < lowest_frac:
+			lowest_frac = frac
+			lowest = u
+	return lowest
+
+static func _make_skill_atk(skill) -> AttackDefinition:
+	var a := AttackDefinition.new()
+	a.attack_name = skill.display_name
+	a.power_multiplier = skill.power
+	a.damage_type = TerrainDefs.DamageType.PHYSICAL
+	a.hits = 1
+	a.targets_row = TerrainDefs.TargetRow.ANY
+	return a
+
+static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: AttackDefinition, mult: float = 1.0) -> int:
 	var stat: float
 	var defense: float
 	if atk_def.damage_type == TerrainDefs.DamageType.PHYSICAL:
@@ -193,6 +319,7 @@ static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: Att
 		defense = _get_stat(target, "resistance")
 
 	var base_dmg := maxf(1.0, (stat * atk_def.power_multiplier) - (defense * 0.5))
+	base_dmg *= mult
 	base_dmg += base_dmg * 0.1 * (randf() * 2.0 - 1.0)
 
 	# Hit/miss check: base 80%, modified by agility delta, clamped to [50%, 100%]

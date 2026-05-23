@@ -1,28 +1,37 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_t0fo8"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_gf0sj"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_6seil"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_gf0sj"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_6seil"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_6ivc7"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_1aw3n"]
 
-[sub_resource type="Resource" id="Resource_6ivc7"]
-script = ExtResource("1_t0fo8")
+[sub_resource type="Resource" id="Resource_oh764"]
+script = ExtResource("1_gf0sj")
 attack_name = "Magic"
 damage_type = 1
 hits = 2
 power_multiplier = 1.2
 
-[sub_resource type="Resource" id="Resource_1aw3n"]
-script = ExtResource("1_t0fo8")
+[sub_resource type="Resource" id="Resource_a5vvi"]
+script = ExtResource("1_gf0sj")
 attack_name = "Staff"
 power_multiplier = 0.6
 
-[sub_resource type="Resource" id="Resource_oh764"]
-script = ExtResource("2_gf0sj")
+[sub_resource type="Resource" id="Resource_et4w3"]
+script = ExtResource("2_6seil")
 target_class_id = "sorcerer"
 required_level = 12
 
+[sub_resource type="Resource" id="Resource_62p5u"]
+script = ExtResource("4_1aw3n")
+skill_id = "mana_surge"
+display_name = "Mana Surge"
+description = "Extra magic attack on the final round."
+condition = 4
+effect = 5
+
 [resource]
-script = ExtResource("3_6seil")
+script = ExtResource("3_6ivc7")
 class_id = "mage"
 display_name = "Mage"
 placeholder_color = Color(0.6, 0.2, 0.8, 1)
@@ -39,6 +48,7 @@ def_growth = Vector2i(1, 2)
 res_growth = Vector2i(3, 4)
 can_lead = true
 deploy_cost = 70
-front_attacks = Array[ExtResource("1_t0fo8")]([SubResource("Resource_1aw3n")])
-back_attacks = Array[ExtResource("1_t0fo8")]([SubResource("Resource_6ivc7")])
-promotions = Array[ExtResource("2_gf0sj")]([SubResource("Resource_oh764")])
+front_attacks = Array[ExtResource("1_gf0sj")]([SubResource("Resource_a5vvi")])
+back_attacks = Array[ExtResource("1_gf0sj")]([SubResource("Resource_oh764")])
+skills = [SubResource("Resource_62p5u")]
+promotions = Array[ExtResource("2_6seil")]([SubResource("Resource_et4w3")])

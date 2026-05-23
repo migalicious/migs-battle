@@ -1,6 +1,7 @@
 extends Node
 
 const PORT := 6560
+const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
 
 var _server: TCPServer = null
 var _client: StreamPeerTCP = null
@@ -154,6 +155,29 @@ func _handle(raw: String) -> void:
 					_send({"ok": true, "town": town_id})
 				else:
 					_send({"error": "town not found: %s" % town_id})
+		"units":
+			var all_units: Array = []
+			for sq in GameState.player_squads:
+				if sq is Squad:
+					for u in (sq as Squad).squad_data.units:
+						all_units.append(_unit_dict(u as UnitData))
+			for sd in GameState.reserve_squads:
+				if sd is SquadData:
+					for u in (sd as SquadData).units:
+						all_units.append(_unit_dict(u as UnitData))
+			_send({"units": all_units})
+		"squads":
+			var out := {"player": [], "reserve": [], "enemy": []}
+			for sq in GameState.player_squads:
+				if sq is Squad:
+					(out["player"] as Array).append(_squad_dict((sq as Squad).squad_data))
+			for sd in GameState.reserve_squads:
+				if sd is SquadData:
+					(out["reserve"] as Array).append(_squad_dict(sd as SquadData))
+			for sq in GameState.enemy_squads:
+				if sq is Squad:
+					(out["enemy"] as Array).append(_squad_dict((sq as Squad).squad_data))
+			_send(out)
 		"force_battle":
 			var atk_sq: Squad = null
 			var def_sq: Squad = null
@@ -165,10 +189,103 @@ func _handle(raw: String) -> void:
 				_send({"error": "need at least one player and one enemy squad"})
 			else:
 				var result := BattleResolver.resolve(atk_sq.squad_data, def_sq.squad_data)
-				var unit_states: Array = []
+				var atk_states: Array = []
 				for u in result.attacker_unit_states:
-					unit_states.append({"name": u.unit_name, "held_item": u.held_item, "hp": u.hp, "alive": u.is_alive})
-				_send({"ok": true, "attacker_wiped": result.attacker_wiped, "defender_wiped": result.defender_wiped, "attacker_xp": result.attacker_xp, "defender_xp": result.defender_xp, "attacker_units": unit_states})
+					atk_states.append(_unit_dict(u as UnitData))
+				var def_states: Array = []
+				for u in result.defender_unit_states:
+					def_states.append(_unit_dict(u as UnitData))
+				var log_entries: Array = []
+				for act in result.action_log:
+					var ba := act as BattleAction
+					log_entries.append({"type": ba.action_type, "actor": ba.actor_unit_id, "target": ba.target_unit_id, "attack": ba.attack_name, "dmg": ba.damage_dealt})
+				_send({"ok": true, "attacker_wiped": result.attacker_wiped, "defender_wiped": result.defender_wiped, "attacker_xp": result.attacker_xp, "defender_xp": result.defender_xp, "attacker_units": atk_states, "defender_units": def_states, "log": log_entries})
+		"inventory":
+			var inv_list: Array = []
+			for inv_id in GameState.player_inventory:
+				var inv_qty: int = GameState.player_inventory[inv_id] as int
+				if inv_qty <= 0:
+					continue
+				var inv_item = ItemRegistry.get_item(inv_id)
+				var inv_entry := {"id": inv_id, "qty": inv_qty}
+				if inv_item:
+					inv_entry.merge(_item_dict(inv_item))
+				inv_list.append(inv_entry)
+			_send({"gold": GameState.player_gold, "inventory": inv_list})
+		"give_item":
+			var gi_id := str(d.get("item", ""))
+			var gi_qty: int = int(d.get("qty", 1))
+			if gi_id == "":
+				_send({"error": "missing item id"})
+			elif not ItemRegistry.get_item(gi_id):
+				_send({"error": "unknown item: %s" % gi_id})
+			else:
+				GameState.player_inventory[gi_id] = GameState.player_inventory.get(gi_id, 0) + gi_qty
+				_send({"ok": true, "item": gi_id, "qty": GameState.player_inventory[gi_id]})
+		"set_gold":
+			var sg_amount: int = int(d.get("amount", 0))
+			GameState.player_gold = sg_amount
+			GameState.gold_changed.emit(0, sg_amount)
+			_send({"ok": true, "gold": GameState.player_gold})
+		"item_defs":
+			var id_list: Array = []
+			for id_item in ItemRegistry.get_all_items():
+				id_list.append(_item_dict(id_item))
+			_send({"items": id_list})
+		"class_defs":
+			var cd_list: Array = []
+			for cd_id in UnitRegistry._classes:
+				cd_list.append(_class_dict(UnitRegistry._classes[cd_id] as ClassDefinition))
+			_send({"classes": cd_list})
+		"inject_unit":
+			var iu_class := str(d.get("class_id", "fighter"))
+			var iu_level: int = int(d.get("level", 1))
+			var iu_row: int = int(d.get("row", 0))
+			var iu_sq: Squad = null
+			for sq in GameState.player_squads:
+				if sq is Squad: iu_sq = sq; break
+			if not iu_sq:
+				_send({"error": "no player squad on map"})
+			else:
+				var iu_unit := UnitRegistry.create_unit(iu_class, iu_level)
+				if not iu_unit:
+					_send({"error": "unknown class_id: %s" % iu_class})
+				else:
+					var iu_col := 0
+					for u in iu_sq.squad_data.units:
+						if (u as UnitData).row == iu_row:
+							iu_col += 1
+					iu_unit.row = iu_row
+					iu_unit.col = iu_col
+					iu_unit.unit_name = iu_class.capitalize() + str(iu_sq.squad_data.units.size())
+					iu_sq.squad_data.units.append(iu_unit)
+					_send({"ok": true, "unit": _unit_dict(iu_unit)})
+		"give_xp":
+			var gx_name := str(d.get("unit", ""))
+			var gx_amount: int = int(d.get("amount", 100))
+			var gx_unit := _find_unit(gx_name)
+			if not gx_unit:
+				_send({"error": "unit not found: %s" % gx_name})
+			else:
+				gx_unit.xp += gx_amount
+				var gx_leveled := 0
+				while LevelSystem.try_level_up(gx_unit):
+					gx_leveled += 1
+				_send({"ok": true, "unit": gx_name, "xp": gx_unit.xp, "level": gx_unit.level, "levels_gained": gx_leveled})
+		"capture_town":
+			var ct_id := str(d.get("town_id", ""))
+			var ct_faction: int = int(d.get("faction", 0))
+			if not GameState.town_ownership.has(ct_id):
+				_send({"error": "unknown town_id: %s" % ct_id})
+			else:
+				GameState.town_ownership[ct_id] = ct_faction
+				var ct_mgr := get_tree().current_scene.get_node_or_null("MapManager") as MapManager
+				if ct_mgr:
+					for ct_town in ct_mgr.get_towns():
+						if (ct_town as TownNode).town_data.town_id == ct_id:
+							(ct_town as TownNode).set_faction(ct_faction)
+							break
+				_send({"ok": true, "town_id": ct_id, "faction": ct_faction})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -260,6 +377,85 @@ func _dump_tree(node: Node, depth: int) -> Array:
 	for child in node.get_children():
 		(entry["children"] as Array).append(_dump_tree(child, depth + 1))
 	return [entry]
+
+func _find_unit(unit_name: String) -> UnitData:
+	for sq in GameState.player_squads:
+		if sq is Squad:
+			for u in (sq as Squad).squad_data.units:
+				if (u as UnitData).unit_name == unit_name:
+					return u as UnitData
+	for sd in GameState.reserve_squads:
+		if sd is SquadData:
+			for u in (sd as SquadData).units:
+				if (u as UnitData).unit_name == unit_name:
+					return u as UnitData
+	return null
+
+func _item_dict(item) -> Dictionary:
+	return {
+		"id": item.item_id, "name": item.display_name, "desc": item.description,
+		"type": int(item.item_type), "cost": item.cost,
+		"hp": item.hp_bonus, "str": item.str_bonus, "agi": item.agi_bonus,
+		"int": item.int_bonus, "def": item.def_bonus, "res": item.res_bonus,
+		"heal_pct": item.heal_percent,
+	}
+
+func _atk_dict(atk) -> Dictionary:
+	var a := atk as AttackDefinition
+	return {
+		"name": a.attack_name, "type": int(a.damage_type),
+		"hits": a.hits, "power": a.power_multiplier,
+		"row": int(a.targets_row), "all_row": a.hits_all_in_row,
+		"all_col": a.hits_all_in_column, "cond": a.condition_id,
+	}
+
+func _class_dict(cls: ClassDefinition) -> Dictionary:
+	var cd_front: Array = []
+	for a in cls.front_attacks: cd_front.append(_atk_dict(a))
+	var cd_back: Array = []
+	for a in cls.back_attacks: cd_back.append(_atk_dict(a))
+	var cd_skills: Array = []
+	for sk in cls.skills:
+		cd_skills.append({
+			"id": sk.skill_id, "name": sk.display_name, "desc": sk.description,
+			"condition": int(sk.condition), "effect": int(sk.effect),
+			"power": sk.power, "heal_pct": sk.heal_percent, "dmg_red": sk.damage_reduction,
+		})
+	return {
+		"id": cls.class_id, "name": cls.display_name, "desc": cls.description,
+		"base_hp": cls.base_hp, "base_str": cls.base_strength, "base_agi": cls.base_agility,
+		"base_int": cls.base_intelligence, "base_def": cls.base_defense, "base_res": cls.base_resistance,
+		"move_type": int(cls.movement_type), "move_speed": cls.base_move_speed,
+		"can_lead": cls.can_lead, "deploy_cost": cls.deploy_cost,
+		"front_attacks": cd_front, "back_attacks": cd_back, "skills": cd_skills,
+	}
+
+func _unit_dict(u: UnitData) -> Dictionary:
+	var cls := UnitRegistry.get_class_def(u.class_id) as ClassDefinition
+	var skills_list: Array = []
+	if cls:
+		for sk in cls.skills:
+			skills_list.append({
+				"id": sk.skill_id, "name": sk.display_name,
+				"desc": sk.description, "condition": int(sk.condition), "effect": int(sk.effect),
+			})
+	return {
+		"name": u.unit_name, "class_id": u.class_id,
+		"class_name": cls.display_name if cls else u.class_id,
+		"level": u.level, "hp": u.hp, "max_hp": u.max_hp,
+		"str": u.strength, "agi": u.agility, "int": u.intelligence,
+		"def": u.defense, "res": u.resistance,
+		"held_item": u.held_item, "alive": u.is_alive,
+		"leader": u.is_leader, "row": u.row, "col": u.col,
+		"xp": u.xp, "xp_to_next": u.xp_to_next,
+		"skills": skills_list,
+	}
+
+func _squad_dict(sd: SquadData) -> Dictionary:
+	var units: Array = []
+	for u in sd.units:
+		units.append(_unit_dict(u as UnitData))
+	return {"id": sd.squad_id, "units": units}
 
 func _send(data: Dictionary) -> void:
 	if _client and _client.get_status() == StreamPeerTCP.STATUS_CONNECTED:

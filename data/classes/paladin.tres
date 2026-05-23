@@ -1,23 +1,32 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_gho34"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_ja1bg"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_eb5mq"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_ja1bg"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_eb5mq"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_wm3ht"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_mj0me"]
 
-[sub_resource type="Resource" id="Resource_wm3ht"]
-script = ExtResource("1_gho34")
+[sub_resource type="Resource" id="Resource_nmq7j"]
+script = ExtResource("1_ja1bg")
 attack_name = "Holy Light"
 damage_type = 4
 targets_row = 2
 
-[sub_resource type="Resource" id="Resource_mj0me"]
-script = ExtResource("1_gho34")
+[sub_resource type="Resource" id="Resource_ai4xu"]
+script = ExtResource("1_ja1bg")
 attack_name = "Slash"
 hits = 3
 power_multiplier = 1.2
 
+[sub_resource type="Resource" id="Resource_80abi"]
+script = ExtResource("4_mj0me")
+skill_id = "holy_aura"
+display_name = "Holy Aura"
+description = "Heals lowest-HP ally each round."
+effect = 3
+heal_percent = 0.1
+
 [resource]
-script = ExtResource("3_eb5mq")
+script = ExtResource("3_wm3ht")
 class_id = "paladin"
 display_name = "Paladin"
 base_hp = 35
@@ -33,5 +42,6 @@ def_growth = Vector2i(3, 5)
 res_growth = Vector2i(2, 3)
 can_lead = true
 deploy_cost = 130
-front_attacks = Array[ExtResource("1_gho34")]([SubResource("Resource_mj0me")])
-back_attacks = Array[ExtResource("1_gho34")]([SubResource("Resource_wm3ht")])
+front_attacks = Array[ExtResource("1_ja1bg")]([SubResource("Resource_ai4xu")])
+back_attacks = Array[ExtResource("1_ja1bg")]([SubResource("Resource_nmq7j")])
+skills = [SubResource("Resource_80abi")]

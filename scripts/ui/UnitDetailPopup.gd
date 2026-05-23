@@ -86,6 +86,15 @@ func show_unit(unit: UnitData) -> void:
 		for atk in cls.back_attacks:
 			_atk_line("Back", atk as AttackDefinition)
 
+		if not cls.skills.is_empty():
+			_vbox.add_child(HSeparator.new())
+			var skill_hdr := Label.new()
+			skill_hdr.text = "SKILLS"
+			skill_hdr.add_theme_font_size_override("font_size", 11)
+			_vbox.add_child(skill_hdr)
+			for sk in cls.skills:
+				_skill_line(sk)
+
 		if not cls.promotions.is_empty():
 			_vbox.add_child(HSeparator.new())
 			var pr: PromotionRequirement = cls.promotions[0] as PromotionRequirement
@@ -116,6 +125,13 @@ func _stat(grid: GridContainer, label: String, value: String) -> void:
 	val.text = value
 	val.add_theme_font_size_override("font_size", 11)
 	grid.add_child(val)
+
+func _skill_line(skill) -> void:
+	var lbl := Label.new()
+	lbl.text = "  %s: %s" % [skill.display_name, skill.description]
+	lbl.add_theme_font_size_override("font_size", 10)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_vbox.add_child(lbl)
 
 func _atk_line(row_label: String, atk: AttackDefinition) -> void:
 	var dt_idx: int = int(atk.damage_type)

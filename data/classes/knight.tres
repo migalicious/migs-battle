@@ -1,36 +1,45 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_c5aol"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_qn3v0"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_1xdxe"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_qn3v0"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_1xdxe"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_nygxs"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_m3xv8"]
 
-[sub_resource type="Resource" id="Resource_nygxs"]
-script = ExtResource("1_c5aol")
+[sub_resource type="Resource" id="Resource_b4p0l"]
+script = ExtResource("1_qn3v0")
 attack_name = "Slash"
 power_multiplier = 0.9
 
-[sub_resource type="Resource" id="Resource_m3xv8"]
-script = ExtResource("1_c5aol")
+[sub_resource type="Resource" id="Resource_tay3r"]
+script = ExtResource("1_qn3v0")
 attack_name = "Slash"
 hits = 2
 power_multiplier = 1.1
 
-[sub_resource type="Resource" id="Resource_b4p0l"]
-script = ExtResource("2_qn3v0")
+[sub_resource type="Resource" id="Resource_wt86p"]
+script = ExtResource("2_1xdxe")
 target_class_id = "paladin"
 required_level = 15
 
-[sub_resource type="Resource" id="Resource_tay3r"]
-script = ExtResource("2_qn3v0")
+[sub_resource type="Resource" id="Resource_r12qn"]
+script = ExtResource("2_1xdxe")
 target_class_id = "cavalry"
 required_level = 8
 
-[sub_resource type="Resource" id="Resource_wt86p"]
-script = ExtResource("2_qn3v0")
+[sub_resource type="Resource" id="Resource_dhwe7"]
+script = ExtResource("2_1xdxe")
 target_class_id = "gryphon_rider"
 
+[sub_resource type="Resource" id="Resource_mpr71"]
+script = ExtResource("4_m3xv8")
+skill_id = "shield_bash"
+display_name = "Shield Bash"
+description = "Bonus hit on the first round."
+condition = 3
+power = 0.5
+
 [resource]
-script = ExtResource("3_1xdxe")
+script = ExtResource("3_nygxs")
 class_id = "knight"
 display_name = "Knight"
 placeholder_color = Color(1, 0.84, 0, 1)
@@ -44,6 +53,7 @@ str_growth = Vector2i(3, 5)
 def_growth = Vector2i(3, 4)
 can_lead = true
 deploy_cost = 80
-front_attacks = Array[ExtResource("1_c5aol")]([SubResource("Resource_m3xv8")])
-back_attacks = Array[ExtResource("1_c5aol")]([SubResource("Resource_nygxs")])
-promotions = Array[ExtResource("2_qn3v0")]([SubResource("Resource_b4p0l"), SubResource("Resource_tay3r"), SubResource("Resource_wt86p")])
+front_attacks = Array[ExtResource("1_qn3v0")]([SubResource("Resource_tay3r")])
+back_attacks = Array[ExtResource("1_qn3v0")]([SubResource("Resource_b4p0l")])
+skills = [SubResource("Resource_mpr71")]
+promotions = Array[ExtResource("2_1xdxe")]([SubResource("Resource_wt86p"), SubResource("Resource_r12qn"), SubResource("Resource_dhwe7")])

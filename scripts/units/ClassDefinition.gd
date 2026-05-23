@@ -30,6 +30,7 @@ extends Resource
 
 @export var front_attacks: Array[AttackDefinition] = []
 @export var back_attacks: Array[AttackDefinition] = []
+@export var skills: Array = []
 @export var promotions: Array[PromotionRequirement] = []
 
 func apply_stat_growth(unit: UnitData) -> void:

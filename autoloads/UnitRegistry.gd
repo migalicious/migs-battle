@@ -1,5 +1,7 @@
 extends Node
 
+const _SkillDef = preload("res://scripts/battle/SkillDefinition.gd")
+
 var _classes: Dictionary = {}
 
 func _ready() -> void:
@@ -58,6 +60,14 @@ func create_unit(class_id: String, level: int) -> UnitData:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+func _skill(sid: String, dname: String, desc: String, cond: int, eff: int,
+		power: float = 1.0, heal: float = 0.0, dmg_red: float = 0.0) -> Resource:
+	var s := _SkillDef.new()
+	s.skill_id = sid; s.display_name = dname; s.description = desc
+	s.condition = cond as _SkillDef.SkillCondition; s.effect = eff as _SkillDef.SkillEffect
+	s.power = power; s.heal_percent = heal; s.damage_reduction = dmg_red
+	return s
+
 func _atk(aname: String, dtype: TerrainDefs.DamageType, hits: int,
 		power: float, trow: TerrainDefs.TargetRow,
 		all_col := false, all_row := false) -> AttackDefinition:
@@ -105,6 +115,7 @@ func _build_default_classes() -> void:
 	fighter.movement_type = INF; fighter.base_move_speed = 3.0; fighter.can_lead = false; fighter.deploy_cost = 50
 	fighter.front_attacks = [_atk("Slash", P, 2, 1.0, FR)]
 	fighter.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
+	fighter.skills        = [_skill("grit", "Grit", "When wounded, reduces incoming damage.", 1, 4, 1.0, 0.0, 0.2)]
 	fighter.promotions    = [_promo("knight",5), _promo("archer",4), _promo("mage",4)]
 	_reg(fighter)
 
@@ -120,6 +131,7 @@ func _build_default_classes() -> void:
 	knight.movement_type = INF; knight.base_move_speed = 3.0; knight.can_lead = true; knight.deploy_cost = 80
 	knight.front_attacks = [_atk("Slash", P, 2, 1.1, FR)]
 	knight.back_attacks  = [_atk("Slash", P, 1, 0.9, FR)]
+	knight.skills        = [_skill("shield_bash", "Shield Bash", "Bonus hit on the first round.", 3, 0, 0.5)]
 	knight.promotions    = [_promo("paladin",15), _promo("cavalry",8), _promo("gryphon_rider",10)]
 	_reg(knight)
 
@@ -135,6 +147,7 @@ func _build_default_classes() -> void:
 	paladin.movement_type = INF; paladin.base_move_speed = 3.0; paladin.can_lead = true; paladin.deploy_cost = 130
 	paladin.front_attacks = [_atk("Slash", P, 3, 1.2, FR)]
 	paladin.back_attacks  = [_atk("Holy Light", HOLY, 1, 1.0, ANY)]
+	paladin.skills        = [_skill("holy_aura", "Holy Aura", "Heals lowest-HP ally each round.", 0, 3, 1.0, 0.10)]
 	paladin.promotions    = []
 	_reg(paladin)
 
@@ -150,6 +163,7 @@ func _build_default_classes() -> void:
 	archer.movement_type = INF; archer.base_move_speed = 3.0; archer.can_lead = true; archer.deploy_cost = 60
 	archer.front_attacks = [_atk("Shot", P, 2, 0.9, FR)]
 	archer.back_attacks  = [_atk("Shot", P, 2, 1.0, BK)]
+	archer.skills        = [_skill("eagle_eye", "Eagle Eye", "30% more damage when HP > 75%.", 2, 1, 1.3)]
 	archer.promotions    = []
 	_reg(archer)
 
@@ -165,6 +179,7 @@ func _build_default_classes() -> void:
 	mage.movement_type = INF; mage.base_move_speed = 3.0; mage.can_lead = true; mage.deploy_cost = 70
 	mage.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
 	mage.back_attacks  = [_atk("Magic", FIRE, 2, 1.2, FR)]
+	mage.skills        = [_skill("mana_surge", "Mana Surge", "Extra magic attack on the final round.", 4, 5, 1.0)]
 	mage.promotions    = [_promo("sorcerer", 12)]
 	_reg(mage)
 
@@ -180,6 +195,7 @@ func _build_default_classes() -> void:
 	sorcerer.movement_type = INF; sorcerer.base_move_speed = 3.0; sorcerer.can_lead = true; sorcerer.deploy_cost = 120
 	sorcerer.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
 	sorcerer.back_attacks  = [_atk("Arcane Blast", DARK, 2, 1.5, FR, true)]
+	sorcerer.skills        = [_skill("drain_life", "Drain Life", "Restores 8% HP after each attack.", 0, 2, 1.0, 0.08)]
 	sorcerer.promotions    = []
 	_reg(sorcerer)
 
@@ -195,6 +211,7 @@ func _build_default_classes() -> void:
 	cavalry.movement_type = CAV; cavalry.base_move_speed = 4.5; cavalry.can_lead = true; cavalry.deploy_cost = 100
 	cavalry.front_attacks = [_atk("Lance Charge", P, 2, 1.3, FR)]
 	cavalry.back_attacks  = [_atk("Slash", P, 1, 0.8, FR)]
+	cavalry.skills        = [_skill("momentum", "Momentum", "50% more damage on the charge.", 3, 1, 1.5)]
 	cavalry.promotions    = []
 	_reg(cavalry)
 
@@ -210,6 +227,7 @@ func _build_default_classes() -> void:
 	gryphon.movement_type = FLY; gryphon.base_move_speed = 2.8; gryphon.can_lead = true; gryphon.deploy_cost = 110
 	gryphon.front_attacks = [_atk("Talon", P, 2, 1.0, FR)]
 	gryphon.back_attacks  = [_atk("Wind Blade", COLD, 1, 1.1, ANY)]
+	gryphon.skills        = [_skill("swoop", "Swoop", "Bonus strike when the enemy front row is gone.", 6, 0, 0.8)]
 	gryphon.promotions    = []
 	_reg(gryphon)
 

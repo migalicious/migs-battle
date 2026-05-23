@@ -1,36 +1,46 @@
 [gd_resource type="Resource" script_class="ClassDefinition" format=3]
 
-[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_pjtn8"]
-[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_27sjw"]
-[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_5i77r"]
+[ext_resource type="Script" path="res://scripts/units/AttackDefinition.gd" id="1_27sjw"]
+[ext_resource type="Script" path="res://scripts/units/PromotionRequirement.gd" id="2_5i77r"]
+[ext_resource type="Script" path="res://scripts/units/ClassDefinition.gd" id="3_3cbce"]
+[ext_resource type="Script" path="res://scripts/battle/SkillDefinition.gd" id="4_riule"]
 
-[sub_resource type="Resource" id="Resource_3cbce"]
-script = ExtResource("1_pjtn8")
+[sub_resource type="Resource" id="Resource_27g4u"]
+script = ExtResource("1_27sjw")
 attack_name = "Slash"
 power_multiplier = 0.8
 
-[sub_resource type="Resource" id="Resource_riule"]
-script = ExtResource("1_pjtn8")
+[sub_resource type="Resource" id="Resource_te7x4"]
+script = ExtResource("1_27sjw")
 attack_name = "Slash"
 hits = 2
 
-[sub_resource type="Resource" id="Resource_27g4u"]
-script = ExtResource("2_27sjw")
+[sub_resource type="Resource" id="Resource_81tom"]
+script = ExtResource("2_5i77r")
 target_class_id = "knight"
 required_level = 5
 
-[sub_resource type="Resource" id="Resource_te7x4"]
-script = ExtResource("2_27sjw")
+[sub_resource type="Resource" id="Resource_0jg40"]
+script = ExtResource("2_5i77r")
 target_class_id = "archer"
 required_level = 4
 
-[sub_resource type="Resource" id="Resource_81tom"]
-script = ExtResource("2_27sjw")
+[sub_resource type="Resource" id="Resource_nhd6u"]
+script = ExtResource("2_5i77r")
 target_class_id = "mage"
 required_level = 4
 
+[sub_resource type="Resource" id="Resource_0pk4d"]
+script = ExtResource("4_riule")
+skill_id = "grit"
+display_name = "Grit"
+description = "When wounded, reduces incoming damage."
+condition = 1
+effect = 4
+damage_reduction = 0.2
+
 [resource]
-script = ExtResource("3_5i77r")
+script = ExtResource("3_3cbce")
 class_id = "fighter"
 display_name = "Fighter"
 placeholder_color = Color(0.47, 0.53, 0.6, 1)
@@ -45,6 +55,7 @@ str_growth = Vector2i(2, 4)
 agi_growth = Vector2i(2, 3)
 def_growth = Vector2i(2, 3)
 deploy_cost = 50
-front_attacks = Array[ExtResource("1_pjtn8")]([SubResource("Resource_riule")])
-back_attacks = Array[ExtResource("1_pjtn8")]([SubResource("Resource_3cbce")])
-promotions = Array[ExtResource("2_27sjw")]([SubResource("Resource_27g4u"), SubResource("Resource_te7x4"), SubResource("Resource_81tom")])
+front_attacks = Array[ExtResource("1_27sjw")]([SubResource("Resource_te7x4")])
+back_attacks = Array[ExtResource("1_27sjw")]([SubResource("Resource_27g4u")])
+skills = [SubResource("Resource_0pk4d")]
+promotions = Array[ExtResource("2_5i77r")]([SubResource("Resource_81tom"), SubResource("Resource_0jg40"), SubResource("Resource_nhd6u")])
