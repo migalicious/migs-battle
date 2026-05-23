@@ -103,7 +103,7 @@ func _collect_income() -> void:
 		if town_owner == TerrainDefs.Faction.PLAYER:
 			player_gold += income
 			gold_changed.emit(TerrainDefs.Faction.PLAYER, player_gold)
-		elif town_owner == TerrainDefs.Faction.ENEMY_A:
+		elif active_factions.has(town_owner) and town_owner != TerrainDefs.Faction.PLAYER:
 			enemy_gold += income
 
 # ── Win Condition Checks ──────────────────────────────────────────────────────

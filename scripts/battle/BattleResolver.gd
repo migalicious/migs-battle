@@ -84,6 +84,11 @@ static func _avg_level(units: Array[UnitData]) -> float:
 static func _run_round(atk_units: Array[UnitData], def_units: Array[UnitData],
 		battle_log: Array[BattleAction], round_num: int,
 		atk_on_water: bool = false, def_on_water: bool = false) -> void:
+	var sep := BattleAction.new()
+	sep.action_type = BattleAction.ActionType.ROUND_START
+	sep.attack_name = "Round %d" % round_num
+	battle_log.append(sep)
+
 	# Initiative queue sorted by agility descending
 	var queue: Array = []
 	for u in atk_units:
@@ -251,6 +256,8 @@ static func _fire_post_attack_skills(actor: UnitData, target: UnitData,
 			continue
 		var eff: int = skill.effect
 		if eff == _SkillDef.SkillEffect.BONUS_DAMAGE:
+			if not target.is_alive:
+				continue
 			var bdmg := maxi(1, int(_get_stat(actor, "strength") * skill.power))
 			_apply_skill_hit(actor, target, bdmg, skill.display_name, battle_log)
 		elif eff == _SkillDef.SkillEffect.HEAL_SELF:
@@ -264,16 +271,32 @@ static func _fire_post_attack_skills(actor: UnitData, target: UnitData,
 				lowest.hp = mini(lowest.max_hp, lowest.hp + heal)
 				_log_heal(actor, lowest, heal, skill.display_name, battle_log)
 		elif eff == _SkillDef.SkillEffect.EXTRA_ATTACK:
-			if target.is_alive:
+			if target.is_alive:  # guard already present — keep
 				var extra := _calculate_damage(actor, target, _make_skill_atk(skill))
 				extra = _apply_guard(target, extra)
 				_apply_skill_hit(actor, target, extra, skill.display_name, battle_log)
 		elif eff == _SkillDef.SkillEffect.STAT_DEBUFF_ENEMY:
 			var cur := int(target.get(skill.stat_target))
 			target.set(skill.stat_target, maxi(0, cur + skill.stat_amount))
+			var debuff_action := BattleAction.new()
+			debuff_action.action_type = BattleAction.ActionType.SKILL
+			debuff_action.actor_unit_id = actor.unit_name
+			debuff_action.target_unit_id = target.unit_name
+			debuff_action.attack_name = skill.display_name
+			debuff_action.description = skill.display_name
+			debuff_action.damage_dealt = 0
+			battle_log.append(debuff_action)
 		elif eff == _SkillDef.SkillEffect.STAT_BUFF_SELF:
 			var cur := int(actor.get(skill.stat_target))
 			actor.set(skill.stat_target, cur + skill.stat_amount)
+			var buff_action := BattleAction.new()
+			buff_action.action_type = BattleAction.ActionType.SKILL
+			buff_action.actor_unit_id = actor.unit_name
+			buff_action.target_unit_id = actor.unit_name
+			buff_action.attack_name = skill.display_name
+			buff_action.description = skill.display_name
+			buff_action.damage_dealt = 0
+			battle_log.append(buff_action)
 
 static func _apply_skill_hit(actor: UnitData, target: UnitData, dmg: int,
 		skill_name: String, battle_log: Array[BattleAction]) -> void:

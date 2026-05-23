@@ -185,7 +185,7 @@ func _build_default_classes() -> void:
 	mage.def_growth = Vector2i(1,2); mage.res_growth = Vector2i(3,4)
 	mage.movement_type = INF; mage.base_move_speed = 3.0; mage.can_lead = true; mage.deploy_cost = 70
 	mage.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
-	mage.back_attacks  = [_atk("Magic", FIRE, 2, 1.2, FR)]
+	mage.back_attacks  = [_atk("Magic", FIRE, 2, 1.2, ANY)]
 	mage.skills        = [_skill("mana_surge", "Mana Surge", "Extra magic attack on the final round.", 4, 5, 1.0)]
 	mage.promotions    = [_promo("sorcerer", 12), _promo("cleric", 8)]
 	_reg(mage)

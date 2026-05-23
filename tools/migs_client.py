@@ -33,7 +33,7 @@ PORT = 6560
 # Enum maps (mirror GDScript)
 # ---------------------------------------------------------------------------
 
-BATTLE_ACTION   = {0: "ATTACK", 1: "HEAL", 2: "SKILL", 3: "MISS", 4: "KILL"}
+BATTLE_ACTION   = {0: "ATTACK", 1: "HEAL", 2: "SKILL", 3: "MISS", 4: "KILL", 5: "ROUND_START"}
 SKILL_CONDITION = {0: "ALWAYS", 1: "HP_BELOW_50", 2: "HP_ABOVE_75",
                    3: "FIRST_ROUND", 4: "LAST_ROUND", 5: "ALLY_DEAD",
                    6: "ENEMY_FRONT_EMPTY", 7: "ON_WATER"}
@@ -101,6 +101,10 @@ def get_scene_tree() -> list:
 def play_again() -> dict:
     """Press Play Again from the Main scene."""
     return press_button("Play Again")
+
+def start_game(seed: int = 42) -> dict:
+    """Bypass all UI menus: reset state, build default squads, load Main scene."""
+    return send({"action": "start_game", "seed": seed}, delay=2.0)
 
 def new_game() -> dict:
     """From TitleScreen: New Game → Generate Map → Start Battle. Returns final state."""

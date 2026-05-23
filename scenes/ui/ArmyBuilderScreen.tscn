@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://armybuilder"]
+[gd_scene format=3 uid="uid://rmybuilder"]
 
 [ext_resource type="Script" path="res://scripts/ui/ArmyBuilderScreen.gd" id="1_script"]
 

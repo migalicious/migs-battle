@@ -37,12 +37,8 @@ def header(title: str) -> None:
 
 def setup_game():
     header("0. Game Setup")
-    press_button("New Game")
+    start_game(seed=42)
     time.sleep(0.5)
-    press_button("Generate Map")
-    time.sleep(1.0)
-    press_button("Start Battle")
-    time.sleep(1.5)
     state = get_state()
     check("Scene is Main", state.get("scene") == "Main",
           f'scene={state.get("scene")}')
@@ -236,21 +232,22 @@ def test_basic_battle():
 
 def test_skill_heal_self():
     header("6. Berserker Bloodlust (HEAL_SELF)")
-    inject_unit("berserker", 10, 0)
+    inject_unit("berserker", 5, 0)
     time.sleep(0.2)
     result = force_battle()
     if "error" in result:
         check("Berserker battle", False, result["error"])
         return
     log = result.get("log", [])
-    skill_entries = [e for e in log if e["type"] == 2]  # type=2 = SKILL
-    check("SKILL entries in log", len(skill_entries) > 0,
-          f'{len(skill_entries)} SKILL entries')
-    berserker_heals = [e for e in skill_entries
+    heal_entries = [e for e in log if e["type"] == 1]  # type=1 = HEAL
+    check("HEAL entries in log", len(heal_entries) > 0,
+          f'{len(heal_entries)} HEAL entries')
+    # Bloodlust (HEAL_SELF) fires ALWAYS — look for heal whose actor has "berserker" in name
+    berserker_heals = [e for e in heal_entries
                        if "berserker" in e.get("actor", "").lower()
                        or "Berserker" in e.get("actor", "")]
-    check("Berserker fired SKILL", len(skill_entries) > 0,
-          f'skill count={len(skill_entries)}')
+    check("Berserker Bloodlust fired", len(berserker_heals) > 0,
+          f'berserker heal count={len(berserker_heals)}')
 
 
 # ────────────────────────────────────────────────────────────
@@ -260,7 +257,7 @@ def test_skill_heal_self():
 def test_cleric_heal():
     header("7. Cleric Heal Attack (is_heal)")
     # Fresh game state for clean test
-    inject_unit("cleric", 5, 1)  # back row
+    inject_unit("cleric", 25, 1)  # level 25 ensures AGI > all enemies → acts first in round 1
     time.sleep(0.2)
     result = force_battle()
     if "error" in result:
@@ -288,9 +285,13 @@ def test_paladin_holy_aura():
         check("Paladin battle", False, result["error"])
         return
     log = result.get("log", [])
-    skill_entries = [e for e in log if e["type"] == 2]
-    check("Paladin SKILL/HEAL_ALLY fired", len(skill_entries) > 0,
-          f'{len(skill_entries)} skill entries')
+    heal_entries = [e for e in log if e["type"] == 1]  # type=1 = HEAL
+    # Holy Aura (HEAL_ALLY) fires ALWAYS — look for heal whose actor contains "paladin"
+    paladin_heals = [e for e in heal_entries
+                     if "paladin" in e.get("actor", "").lower()
+                     or "Paladin" in e.get("actor", "")]
+    check("Paladin Holy Aura fired", len(paladin_heals) > 0,
+          f'{len(paladin_heals)} paladin heal entries')
 
 
 # ────────────────────────────────────────────────────────────

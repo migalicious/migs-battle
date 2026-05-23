@@ -146,6 +146,7 @@ func _make_slot(unit: UnitData) -> Control:
 		container.add_child(hp_bar)
 		box.set_meta("hp_bar", hp_bar)
 		box.set_meta("unit_hp", unit.hp)
+		box.set_meta("unit_max_hp", unit.max_hp)
 
 	return container
 
@@ -186,11 +187,19 @@ func _process_action(action: BattleAction) -> void:
 				_update_hp(box, -action.damage_dealt)
 				_grey_out_slot(box)
 		BattleAction.ActionType.SKILL:
-			_log_line("[color=orange]%s — %s hits %s for %d![/color]" % [
-				action.actor_unit_id, action.attack_name, action.target_unit_id, action.damage_dealt])
-			if box:
-				_show_damage_number(box, str(action.damage_dealt), Color(1.0, 0.6, 0.0))
-				_update_hp(box, -action.damage_dealt)
+			if action.damage_dealt > 0:
+				_log_line("[color=orange]%s — %s hits %s for %d![/color]" % [
+					action.actor_unit_id, action.attack_name, action.target_unit_id, action.damage_dealt])
+				if box:
+					_show_damage_number(box, str(action.damage_dealt), Color(1.0, 0.6, 0.0))
+					_update_hp(box, -action.damage_dealt)
+			else:
+				_log_line("[color=#c080ff]%s — %s: %s![/color]" % [
+					action.actor_unit_id, action.attack_name, action.description])
+				if box:
+					_show_damage_number(box, action.description + "!", Color(0.75, 0.5, 1.0))
+		BattleAction.ActionType.ROUND_START:
+			_log_line("[color=#888888]── %s ──[/color]" % action.attack_name)
 		BattleAction.ActionType.HEAL:
 			_log_line("[color=green]%s — %s restores %d HP to %s![/color]" % [
 				action.actor_unit_id, action.attack_name, action.damage_dealt, action.target_unit_id])
@@ -214,6 +223,14 @@ func _update_hp(box: ColorRect, delta: int) -> void:
 	box.set_meta("unit_hp", cur)
 	if bar:
 		bar.value = float(cur)
+		var max_hp: int = box.get_meta("unit_max_hp", 1) as int
+		var frac := float(cur) / float(maxi(max_hp, 1))
+		if frac > 0.5:
+			bar.modulate = Color(0.2, 0.85, 0.2)
+		elif frac > 0.25:
+			bar.modulate = Color(0.9, 0.75, 0.1)
+		else:
+			bar.modulate = Color(0.9, 0.2, 0.2)
 
 func _show_damage_number(box: ColorRect, text: String, color: Color) -> void:
 	var lbl := Label.new()

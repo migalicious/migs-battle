@@ -274,6 +274,35 @@ func _handle(raw: String) -> void:
 				while LevelSystem.try_level_up(gx_unit):
 					gx_leveled += 1
 				_send({"ok": true, "unit": gx_name, "xp": gx_unit.xp, "level": gx_unit.level, "levels_gained": gx_leveled})
+		"start_game":
+			# Bypass all UI: reset state, create default squads, load Main scene
+			GameState.reset()
+			var sg_params := MapParams.new()
+			sg_params.width = 24
+			sg_params.height = 24
+			sg_params.map_seed = int(d.get("seed", 42))
+			sg_params.num_towns = 4
+			sg_params.num_castles = 2
+			sg_params.active_factions = [0, 1]
+			GameState.pending_map_params = sg_params
+			var sg_squad := SquadData.new()
+			sg_squad.squad_id = "player_squad_0"
+			sg_squad.faction = TerrainDefs.Faction.PLAYER
+			var _sg_names := ["Roland", "Gawain", "Sylvia", "Marcus", "Bors"]
+			var _sg_classes := ["knight", "fighter", "archer", "fighter", "archer"]
+			for sg_i in range(5):
+				var sg_unit := UnitRegistry.create_unit(_sg_classes[sg_i], 5)
+				if sg_unit:
+					sg_unit.unit_name = _sg_names[sg_i]
+					sg_unit.faction = TerrainDefs.Faction.PLAYER
+					sg_unit.row = 0 if sg_i < 3 else 1
+					sg_unit.col = sg_i if sg_i < 3 else sg_i - 3
+					if sg_i == 0:
+						sg_unit.is_leader = true
+					sg_squad.units.append(sg_unit)
+			GameState.configured_squads = [sg_squad]
+			get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+			_send({"ok": true})
 		"capture_town":
 			var ct_id := str(d.get("town_id", ""))
 			var ct_faction: int = int(d.get("faction", 0))

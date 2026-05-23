@@ -63,6 +63,17 @@ func _assign_objective(squad: Squad) -> Dictionary:
 		if hq:
 			return {"type": "defend", "target": hq}
 
+	# Cooperative: assist an allied faction whose HQ is under threat
+	for faction in GameState.active_factions:
+		if faction == controlled_faction:
+			continue
+		if GameState.get_relation(controlled_faction, faction) != GameState.Relation.ALLIED:
+			continue
+		if _faction_hq_under_threat(faction):
+			var allied_hq := _map_manager.get_hq(faction)
+			if allied_hq:
+				return {"type": "assist_ally", "target": allied_hq}
+
 	var lost := _find_recently_lost_town()
 	if lost:
 		return {"type": "recapture", "target": lost}
@@ -89,13 +100,16 @@ func _execute_objective(squad: Squad, objective: Dictionary) -> void:
 # ── Threat Detection ──────────────────────────────────────────────────────────
 
 func _hq_under_threat() -> bool:
-	var hq := _map_manager.get_hq(controlled_faction)
+	return _faction_hq_under_threat(controlled_faction)
+
+func _faction_hq_under_threat(faction: int) -> bool:
+	var hq := _map_manager.get_hq(faction)
 	if not hq:
 		return false
-	for faction in GameState.active_factions:
-		if not GameState.are_hostile(controlled_faction, faction):
+	for other_faction in GameState.active_factions:
+		if not GameState.are_hostile(faction, other_faction):
 			continue
-		for sq in GameState.get_squads_by_faction(faction):
+		for sq in GameState.get_squads_by_faction(other_faction):
 			if is_instance_valid(sq) and sq.global_position.distance_to(hq.global_position) < THREAT_RADIUS:
 				return true
 	return false
