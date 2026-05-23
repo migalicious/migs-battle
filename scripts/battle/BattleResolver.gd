@@ -1,7 +1,6 @@
 class_name BattleResolver
 extends RefCounted
 
-const ROUNDS: int = 3
 const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
 const _SkillDef = preload("res://scripts/battle/SkillDefinition.gd")
 
@@ -17,7 +16,7 @@ static func resolve(attacker: SquadData, defender: SquadData,
 
 	_apply_consumables(atk_units, def_units)
 
-	for round_num in range(ROUNDS):
+	for round_num in range(GameBalance.ROUNDS):
 		if _all_dead(atk_units) or _all_dead(def_units):
 			break
 		_run_round(atk_units, def_units, battle_log, round_num + 1, atk_on_water, def_on_water)
@@ -33,9 +32,8 @@ static func resolve(attacker: SquadData, defender: SquadData,
 	var atk_alive := _count_alive(atk_units)
 	var def_alive := _count_alive(def_units)
 
-	# §04: winner gets 10 + (enemy_avg_level * 3) per unit; loser gets 5 + (enemy_avg_level * 1) per unit
-	var atk_per := (10 + int(def_avg_level * 3)) if not result.attacker_wiped else (5 + int(def_avg_level * 1))
-	var def_per := (10 + int(atk_avg_level * 3)) if not result.defender_wiped else (5 + int(atk_avg_level * 1))
+	var atk_per := (GameBalance.XP_WIN_BASE + int(def_avg_level * GameBalance.XP_WIN_PER_LEVEL)) if not result.attacker_wiped else (GameBalance.XP_LOSE_BASE + int(def_avg_level * GameBalance.XP_LOSE_PER_LEVEL))
+	var def_per := (GameBalance.XP_WIN_BASE + int(atk_avg_level * GameBalance.XP_WIN_PER_LEVEL)) if not result.defender_wiped else (GameBalance.XP_LOSE_BASE + int(atk_avg_level * GameBalance.XP_LOSE_PER_LEVEL))
 	result.attacker_xp = atk_per * maxi(atk_alive, 1)
 	result.defender_xp = def_per * maxi(def_alive, 1)
 
@@ -224,7 +222,7 @@ static func _build_context(actor: UnitData, allies: Array[UnitData],
 			front_alive += 1
 	return {
 		"round": round_num,
-		"total_rounds": ROUNDS,
+		"total_rounds": GameBalance.ROUNDS,
 		"hp_fraction": float(actor.hp) / float(maxi(actor.max_hp, 1)),
 		"ally_dead": alive_allies < allies.size(),
 		"enemy_front_empty": front_alive == 0,
@@ -359,12 +357,11 @@ static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: Att
 		stat = _get_stat(attacker, "intelligence")
 		defense = _get_stat(target, "resistance")
 
-	var base_dmg := maxf(1.0, (stat * atk_def.power_multiplier) - (defense * 0.5))
+	var base_dmg := maxf(1.0, (stat * atk_def.power_multiplier) - (defense * GameBalance.DEFENSE_REDUCTION))
 	base_dmg *= mult
-	base_dmg += base_dmg * 0.1 * (randf() * 2.0 - 1.0)
+	base_dmg += base_dmg * GameBalance.DAMAGE_VARIANCE * (randf() * 2.0 - 1.0)
 
-	# Hit/miss check: base 80%, modified by agility delta, clamped to [50%, 100%]
-	var hit_chance := clampf(0.8 + (_get_stat(attacker, "agility") - _get_stat(target, "agility")) * 0.02, 0.5, 1.0)
+	var hit_chance := clampf(GameBalance.BASE_HIT_CHANCE + (_get_stat(attacker, "agility") - _get_stat(target, "agility")) * GameBalance.HIT_CHANCE_PER_AGI, 0.5, 1.0)
 	if randf() > hit_chance:
 		return -1  # Miss
 

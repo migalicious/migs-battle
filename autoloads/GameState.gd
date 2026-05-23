@@ -32,7 +32,7 @@ var save_squad_data: Dictionary = {}
 
 var player_gold: int = 100
 var enemy_gold: int = 100
-var gold_tick_interval: float = 10.0
+var gold_tick_interval: float = GameBalance.GOLD_TICK_INTERVAL
 var _gold_timer: float = 0.0
 var player_inventory: Dictionary = {}
 

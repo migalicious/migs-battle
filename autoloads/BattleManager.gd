@@ -154,7 +154,7 @@ func _precompute_side(unit_states: Array[UnitData], total_xp: int, result: Battl
 		while sim_xp >= sim_xp_to_next:
 			sim_xp -= sim_xp_to_next
 			sim_level += 1
-			sim_xp_to_next = 100 * sim_level
+			sim_xp_to_next = GameBalance.XP_THRESHOLD_BASE * sim_level
 			var promo := _sim_check_promotion(sim_class, sim_level)
 			var event := {"unit_name": unit.unit_name, "new_level": sim_level, "promoted_to": promo}
 			result.level_up_events.append(event)

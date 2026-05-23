@@ -197,7 +197,7 @@ func _tween_town_colors(town: TownNode, new_faction: int) -> void:
 
 func _income_for_type(t: TerrainDefs.TownType) -> int:
 	match t:
-		TerrainDefs.TownType.TOWN:   return 15
-		TerrainDefs.TownType.CASTLE: return 30
-		TerrainDefs.TownType.HQ:     return 50
+		TerrainDefs.TownType.TOWN:   return GameBalance.TOWN_INCOME
+		TerrainDefs.TownType.CASTLE: return GameBalance.CASTLE_INCOME
+		TerrainDefs.TownType.HQ:     return GameBalance.HQ_INCOME
 		_: return 0

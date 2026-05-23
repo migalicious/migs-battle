@@ -1,10 +1,6 @@
 class_name AIFaction
 extends Node
 
-const TICK_INTERVAL: float = 8.0
-const MAX_AI_SQUADS: int = 4
-const THREAT_RADIUS: float = 12.0
-
 const _SQUAD_SCENE := preload("res://scenes/squads/Squad.tscn")
 
 @export var controlled_faction: int = TerrainDefs.Faction.ENEMY_A
@@ -27,7 +23,7 @@ func _process(delta: float) -> void:
 	if GameState.current_phase != GameState.Phase.OVERWORLD:
 		return
 	tick_timer += delta
-	if tick_timer >= TICK_INTERVAL:
+	if tick_timer >= GameBalance.AI_TICK_INTERVAL:
 		tick_timer = 0.0
 		_run_ai_tick()
 
@@ -35,7 +31,7 @@ func _process(delta: float) -> void:
 
 func _initial_spawn() -> void:
 	var spawn_points := _map_manager.get_towns_by_faction(controlled_faction)
-	var count := mini(spawn_points.size(), MAX_AI_SQUADS)
+	var count := mini(spawn_points.size(), GameBalance.AI_MAX_SQUADS)
 	for i in range(count):
 		var town: TownNode = spawn_points[i]
 		var data := _build_template(i)
@@ -110,7 +106,7 @@ func _faction_hq_under_threat(faction: int) -> bool:
 		if not GameState.are_hostile(faction, other_faction):
 			continue
 		for sq in GameState.get_squads_by_faction(other_faction):
-			if is_instance_valid(sq) and sq.global_position.distance_to(hq.global_position) < THREAT_RADIUS:
+			if is_instance_valid(sq) and sq.global_position.distance_to(hq.global_position) < GameBalance.AI_THREAT_RADIUS:
 				return true
 	return false
 

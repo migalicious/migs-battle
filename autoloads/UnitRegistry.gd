@@ -280,7 +280,7 @@ func _build_default_classes() -> void:
 	berserker.agi_growth = Vector2i(2,4); berserker.int_growth = Vector2i(1,2)
 	berserker.def_growth = Vector2i(2,3); berserker.res_growth = Vector2i(1,2)
 	berserker.movement_type = INF; berserker.base_move_speed = 3.0; berserker.can_lead = true; berserker.deploy_cost = 140
-	berserker.front_attacks = [_atk("Rampage", P, 3, 1.3, FR)]
+	berserker.front_attacks = [_atk("Rampage", P, 2, 1.3, FR)]
 	berserker.back_attacks  = [_atk("War Cry", P, 1, 1.0, FR, false, true)]
 	berserker.skills        = [_skill("bloodlust", "Bloodlust", "Restores 5% HP after each attack.", 0, 2, 1.0, 0.05)]
 	berserker.promotions    = []

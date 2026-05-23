@@ -24,6 +24,7 @@ window/size/mode=2
 
 [autoload]
 
+GameBalance="*res://scripts/GameBalance.gd"
 UnitRegistry="*res://autoloads/UnitRegistry.gd"
 ItemRegistry="*res://autoloads/ItemRegistry.gd"
 BattleManager="*res://autoloads/BattleManager.gd"
