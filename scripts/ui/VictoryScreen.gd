@@ -4,6 +4,8 @@ extends CanvasLayer
 var _result_label: Label = null
 var _sub_label: Label = null
 var _seed_label: Label = null
+var _play_btn: Button = null
+var _campaign_btn: Button = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -55,11 +57,18 @@ func _build_ui() -> void:
 	btn_row.add_theme_constant_override("separation", 16)
 	vbox.add_child(btn_row)
 
-	var play_btn := Button.new()
-	play_btn.text = "Play Again"
-	play_btn.custom_minimum_size = Vector2(140.0, 44.0)
-	play_btn.pressed.connect(_on_play_again_pressed)
-	btn_row.add_child(play_btn)
+	_play_btn = Button.new()
+	_play_btn.text = "Play Again"
+	_play_btn.custom_minimum_size = Vector2(140.0, 44.0)
+	_play_btn.pressed.connect(_on_play_again_pressed)
+	btn_row.add_child(_play_btn)
+
+	_campaign_btn = Button.new()
+	_campaign_btn.text = "Continue Campaign"
+	_campaign_btn.custom_minimum_size = Vector2(180.0, 44.0)
+	_campaign_btn.pressed.connect(_on_campaign_continue_pressed)
+	_campaign_btn.visible = false
+	btn_row.add_child(_campaign_btn)
 
 	var quit_btn := Button.new()
 	quit_btn.text = "Quit"
@@ -72,6 +81,10 @@ func _on_faction_won(winning_faction: int) -> void:
 		_result_label.text = "VICTORY!"
 		_result_label.modulate = Color(0.35, 1.0, 0.35)
 		_sub_label.text = "The enemy stronghold has fallen."
+		if GameState.campaign_run_active:
+			GameState.collect_survivors()
+			_play_btn.visible = false
+			_campaign_btn.visible = true
 	else:
 		_result_label.text = "DEFEAT"
 		_result_label.modulate = Color(1.0, 0.3, 0.3)
@@ -84,3 +97,8 @@ func _on_play_again_pressed() -> void:
 	GameState.reset()
 	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+func _on_campaign_continue_pressed() -> void:
+	GameState.current_scenario_idx += 1
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/ui/CampaignTransitionScreen.tscn")

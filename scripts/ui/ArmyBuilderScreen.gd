@@ -29,7 +29,10 @@ var _popup: UnitDetailPopup = null
 
 func _ready() -> void:
 	_build_ui()
-	setup(_make_v2_starter())
+	if GameState.campaign_run_active and not GameState.persistent_roster.is_empty():
+		setup_from_roster(GameState.persistent_roster)
+	else:
+		setup(_make_v2_starter())
 
 func _make_v2_starter():
 	var s = _ScenarioDataScript.new()
@@ -61,6 +64,21 @@ func _make_v2_starter():
 func setup(scenario) -> void:
 	_scenario = scenario
 	_all_units = _build_unit_pool(scenario)
+	_unassigned = _all_units.duplicate()
+	_squads = []
+	_add_squad()
+	_refresh()
+
+func setup_from_roster(roster: Array[UnitData]) -> void:
+	var stub := _ScenarioDataScript.new()
+	stub.scenario_name = "Campaign"
+	stub.max_squads = 3
+	stub.max_reserve_squads = 5
+	stub.starting_units = []
+	_scenario = stub
+	_all_units = []
+	for u in roster:
+		_all_units.append(u)
 	_unassigned = _all_units.duplicate()
 	_squads = []
 	_add_squad()
@@ -344,11 +362,16 @@ func _on_new_squad_pressed() -> void:
 		_refresh()
 
 func _on_start_pressed() -> void:
-	if _validate():
-		var non_empty: Array[SquadData] = []
-		for sq in _squads:
-			if not sq.units.is_empty():
-				non_empty.append(sq)
+	if not _validate():
+		return
+	var non_empty: Array[SquadData] = []
+	for sq in _squads:
+		if not sq.units.is_empty():
+			non_empty.append(sq)
+	if GameState.campaign_run_active:
+		GameState.configured_squads = non_empty
+		get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+	else:
 		army_ready.emit(non_empty)
 
 # ── Leader logic ──────────────────────────────────────────────────────────────

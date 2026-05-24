@@ -49,6 +49,18 @@ func save() -> void:
 			reserve_arr.append(_serialize_squad(sd as SquadData))
 	cfg.set_value("squads", "reserve", reserve_arr)
 
+	# Campaign state
+	if GameState.campaign_run_active:
+		cfg.set_value("meta", "save_type", "campaign")
+		cfg.set_value("campaign", "current_scenario_idx",  GameState.current_scenario_idx)
+		cfg.set_value("campaign", "difficulty_permadeath",  GameState.difficulty_permadeath)
+		var roster_arr: Array = []
+		for u in GameState.persistent_roster:
+			roster_arr.append(_serialize_unit(u))
+		cfg.set_value("campaign", "persistent_roster", roster_arr)
+	else:
+		cfg.set_value("meta", "save_type", "random")
+
 	cfg.save(SAVE_PATH)
 
 func load_game() -> void:
@@ -90,6 +102,17 @@ func load_game() -> void:
 	var active_raw:  Array = cfg.get_value("squads", "active",  [])
 	var reserve_raw: Array = cfg.get_value("squads", "reserve", [])
 	GameState.save_squad_data = {"active": active_raw, "reserve": reserve_raw}
+
+	# Campaign state
+	var save_type: String = cfg.get_value("meta", "save_type", "random")
+	if save_type == "campaign":
+		GameState.campaign_run_active    = true
+		GameState.current_scenario_idx   = cfg.get_value("campaign", "current_scenario_idx", 0)
+		GameState.difficulty_permadeath  = cfg.get_value("campaign", "difficulty_permadeath", false)
+		var roster_raw: Array = cfg.get_value("campaign", "persistent_roster", [])
+		GameState.persistent_roster = []
+		for ud in roster_raw:
+			GameState.persistent_roster.append(deserialize_unit(ud))
 
 	GameState.is_loading_save   = true
 	GameState.pending_map_params = p

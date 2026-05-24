@@ -28,6 +28,9 @@ func _load_or_build_classes() -> void:
 func get_class_def(class_id: String) -> ClassDefinition:
 	return _classes.get(class_id, null) as ClassDefinition
 
+func get_all_class_defs() -> Array:
+	return _classes.values()
+
 func create_unit(class_id: String, level: int) -> UnitData:
 	var cls := get_class_def(class_id)
 	if not cls:

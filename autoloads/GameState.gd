@@ -29,6 +29,11 @@ var pending_map_params: MapParams = null
 var configured_squads: Array[SquadData] = []
 var last_map_params: MapParams = null
 
+var persistent_roster: Array[UnitData] = []
+var campaign_run_active: bool = false
+var current_scenario_idx: int = 0
+var difficulty_permadeath: bool = false
+
 var is_loading_save: bool = false
 var save_squad_data: Dictionary = {}
 
@@ -199,7 +204,40 @@ func reset() -> void:
 	enemy_gold = 100
 	_gold_timer = 0.0
 	player_inventory = {}
+	persistent_roster = []
+	campaign_run_active = false
+	current_scenario_idx = 0
+	difficulty_permadeath = false
 	_init_default_relations()
+
+# ── Campaign Unit Persistence ─────────────────────────────────────────────────
+
+func collect_survivors() -> void:
+	persistent_roster = []
+	for sq in player_squads:
+		if not is_instance_valid(sq):
+			continue
+		for u in sq.squad_data.units:
+			_roster_add(u)
+	for sd in reserve_squads:
+		for u in sd.units:
+			_roster_add(u)
+
+func _roster_add(u: UnitData) -> void:
+	if difficulty_permadeath and not u.is_alive:
+		return
+	if not u.is_alive:
+		u.hp = maxi(1, int(float(u.max_hp) * 0.25))
+		u.is_alive = true
+	persistent_roster.append(u)
+
+func apply_between_map_recovery(unit: UnitData) -> void:
+	if not unit.is_alive:
+		unit.hp = maxi(1, int(float(unit.max_hp) * 0.25))
+		unit.is_alive = true
+	if float(unit.hp) / float(maxi(unit.max_hp, 1)) < 0.5:
+		unit.hp = int(float(unit.max_hp) * 0.5)
+	unit.is_wounded = float(unit.hp) / float(maxi(unit.max_hp, 1)) < 0.25
 
 func _get_map_manager() -> MapManager:
 	var scene := get_tree().current_scene
