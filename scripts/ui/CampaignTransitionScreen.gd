@@ -9,6 +9,7 @@ const _RECRUIT_NAMES := [
 ]
 
 var _selected_unit: UnitData = null
+var _title_lbl: Label = null
 var _roster_vbox: VBoxContainer = null
 var _shop_vbox: VBoxContainer = null
 var _recruit_cls_opt: OptionButton = null
@@ -16,9 +17,14 @@ var _gold_lbl: Label = null
 var _injured_lbl: Label = null
 var _heal_all_btn: Button = null
 var _feedback_lbl: Label = null
+var _next_name_lbl: Label = null
+var _next_desc_lbl: Label = null
+var _next_factions_lbl: Label = null
+var _next_win_lbl: Label = null
 
 func _ready() -> void:
 	_build_ui()
+	_update_scenario_display()
 	_refresh_all()
 
 func _build_ui() -> void:
@@ -32,12 +38,11 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", 0)
 	add_child(root)
 
-	# Title
-	var title_lbl := Label.new()
-	title_lbl.text = "CAMPAIGN ADVANCE — Scenario %d Complete" % GameState.current_scenario_idx
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_lbl.add_theme_font_size_override("font_size", 22)
-	root.add_child(title_lbl)
+	# Title (will be updated by _update_scenario_display)
+	_title_lbl = Label.new()
+	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_lbl.add_theme_font_size_override("font_size", 20)
+	root.add_child(_title_lbl)
 	root.add_child(HSeparator.new())
 
 	# Main body
@@ -53,7 +58,6 @@ func _build_ui() -> void:
 	left.add_theme_constant_override("separation", 6)
 	body.add_child(left)
 
-	# Roster section
 	var army_hdr := Label.new()
 	army_hdr.text = "YOUR ARMY  (click to select for item equip)"
 	army_hdr.add_theme_font_size_override("font_size", 13)
@@ -134,16 +138,25 @@ func _build_ui() -> void:
 	next_hdr.modulate = Color(1.0, 0.85, 0.3)
 	right.add_child(next_hdr)
 
-	var next_name := Label.new()
-	next_name.text = "Scenario %d" % (GameState.current_scenario_idx + 1)
-	next_name.add_theme_font_size_override("font_size", 14)
-	right.add_child(next_name)
+	_next_name_lbl = Label.new()
+	_next_name_lbl.add_theme_font_size_override("font_size", 14)
+	right.add_child(_next_name_lbl)
 
-	var next_desc := Label.new()
-	next_desc.text = "A new challenge awaits.\nPrepare your forces."
-	next_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_ADAPTIVE
-	next_desc.modulate = Color(0.75, 0.75, 0.75)
-	right.add_child(next_desc)
+	_next_desc_lbl = Label.new()
+	_next_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_ADAPTIVE
+	_next_desc_lbl.modulate = Color(0.75, 0.75, 0.75)
+	right.add_child(_next_desc_lbl)
+
+	_next_factions_lbl = Label.new()
+	_next_factions_lbl.add_theme_font_size_override("font_size", 11)
+	_next_factions_lbl.modulate = Color(0.7, 0.8, 1.0)
+	_next_factions_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_ADAPTIVE
+	right.add_child(_next_factions_lbl)
+
+	_next_win_lbl = Label.new()
+	_next_win_lbl.add_theme_font_size_override("font_size", 11)
+	_next_win_lbl.modulate = Color(0.7, 1.0, 0.7)
+	right.add_child(_next_win_lbl)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -174,6 +187,50 @@ func _build_ui() -> void:
 	advance_btn.custom_minimum_size = Vector2(140.0, 40.0)
 	advance_btn.pressed.connect(_on_advance_pressed)
 	footer.add_child(advance_btn)
+
+# ── Scenario Display ──────────────────────────────────────────────────────────
+
+func _update_scenario_display() -> void:
+	var cdef = GameState.campaign_def
+
+	# Title
+	if GameState.campaign_retry:
+		var retry_name := ""
+		if cdef and GameState.current_scenario_idx < cdef.scenarios.size():
+			retry_name = cdef.scenarios[GameState.current_scenario_idx].scenario_name
+		_title_lbl.text = "DEFEAT — Retry: \"%s\"" % retry_name
+		_title_lbl.modulate = Color(1.0, 0.5, 0.4)
+	else:
+		var cleared_name := ""
+		if cdef and GameState.current_scenario_idx > 0:
+			cleared_name = cdef.scenarios[GameState.current_scenario_idx - 1].scenario_name
+		_title_lbl.text = "SCENARIO CLEARED — \"%s\"" % cleared_name
+		_title_lbl.modulate = Color(0.4, 1.0, 0.5)
+
+	# Next scenario panel
+	if cdef and GameState.current_scenario_idx < cdef.scenarios.size():
+		var next := cdef.scenarios[GameState.current_scenario_idx]
+		_next_name_lbl.text = "\"%s\"" % next.scenario_name
+
+		_next_desc_lbl.text = next.description
+
+		var faction_names: Array = []
+		for f in next.active_factions:
+			faction_names.append(TerrainDefs.FACTION_NAMES.get(int(f), "Faction %d" % f))
+		_next_factions_lbl.text = "Factions: " + ", ".join(faction_names)
+
+		var win_labels: Array = []
+		for wc in next.win_conditions:
+			match str(wc):
+				"hq_capture":      win_labels.append("HQ Capture")
+				"all_strongholds": win_labels.append("All Strongholds")
+				_:                 win_labels.append(str(wc))
+		_next_win_lbl.text = "Win: " + ", ".join(win_labels)
+	else:
+		_next_name_lbl.text = "—"
+		_next_desc_lbl.text = "No further scenarios."
+		_next_factions_lbl.text = ""
+		_next_win_lbl.text = ""
 
 # ── Data Refresh ──────────────────────────────────────────────────────────────
 
@@ -222,12 +279,12 @@ func _make_unit_row(u: UnitData) -> HBoxContainer:
 		w_lbl.modulate = Color(1.0, 0.6, 0.0)
 		row.add_child(w_lbl)
 
-	var select_btn := Button.new()
-	select_btn.text = "Select" if u != _selected_unit else "✓"
-	select_btn.custom_minimum_size = Vector2(58.0, 0.0)
+	var sel_btn := Button.new()
+	sel_btn.text = "✓" if u == _selected_unit else "Select"
+	sel_btn.custom_minimum_size = Vector2(58.0, 0.0)
 	var uc := u
-	select_btn.pressed.connect(func() -> void: _on_unit_selected(uc))
-	row.add_child(select_btn)
+	sel_btn.pressed.connect(func() -> void: _on_unit_selected(uc))
+	row.add_child(sel_btn)
 
 	if hp_frac < 1.0:
 		var heal_btn := Button.new()
@@ -263,8 +320,8 @@ func _make_shop_row(item) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 
-	var info_lbl := Label.new()
 	var discounted := int(float(item.cost) * 0.9)
+	var info_lbl := Label.new()
 	info_lbl.text = "%s — %s" % [item.display_name, item.description]
 	info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_lbl.clip_text = true

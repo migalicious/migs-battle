@@ -1,11 +1,20 @@
 extends Node
 
 const SAVE_PATH := "user://savegame.cfg"
+const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 func load_exists() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
+
+func load_exists_campaign() -> bool:
+	if not FileAccess.file_exists(SAVE_PATH):
+		return false
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return false
+	return cfg.get_value("meta", "save_type", "random") == "campaign"
 
 func save() -> void:
 	var cfg := ConfigFile.new()
@@ -106,13 +115,14 @@ func load_game() -> void:
 	# Campaign state
 	var save_type: String = cfg.get_value("meta", "save_type", "random")
 	if save_type == "campaign":
-		GameState.campaign_run_active    = true
-		GameState.current_scenario_idx   = cfg.get_value("campaign", "current_scenario_idx", 0)
-		GameState.difficulty_permadeath  = cfg.get_value("campaign", "difficulty_permadeath", false)
+		GameState.campaign_run_active   = true
+		GameState.current_scenario_idx  = cfg.get_value("campaign", "current_scenario_idx", 0)
+		GameState.difficulty_permadeath = cfg.get_value("campaign", "difficulty_permadeath", false)
 		var roster_raw: Array = cfg.get_value("campaign", "persistent_roster", [])
 		GameState.persistent_roster = []
 		for ud in roster_raw:
 			GameState.persistent_roster.append(deserialize_unit(ud))
+		GameState.campaign_def = _CampaignDef.build_default()
 
 	GameState.is_loading_save   = true
 	GameState.pending_map_params = p

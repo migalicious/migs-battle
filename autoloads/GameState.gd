@@ -33,6 +33,8 @@ var persistent_roster: Array[UnitData] = []
 var campaign_run_active: bool = false
 var current_scenario_idx: int = 0
 var difficulty_permadeath: bool = false
+var campaign_def = null      # CampaignDef instance (untyped)
+var campaign_retry: bool = false  # true when retrying same scenario after defeat
 
 var is_loading_save: bool = false
 var save_squad_data: Dictionary = {}
@@ -208,6 +210,8 @@ func reset() -> void:
 	campaign_run_active = false
 	current_scenario_idx = 0
 	difficulty_permadeath = false
+	campaign_def = null
+	campaign_retry = false
 	_init_default_relations()
 
 # ── Campaign Unit Persistence ─────────────────────────────────────────────────

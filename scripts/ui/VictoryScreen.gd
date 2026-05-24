@@ -6,6 +6,7 @@ var _sub_label: Label = null
 var _seed_label: Label = null
 var _play_btn: Button = null
 var _campaign_btn: Button = null
+var _is_player_victory: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -22,10 +23,10 @@ func _build_ui() -> void:
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_CENTER)
-	vbox.offset_left   = -220.0
-	vbox.offset_right  =  220.0
-	vbox.offset_top    = -130.0
-	vbox.offset_bottom =  130.0
+	vbox.offset_left   = -240.0
+	vbox.offset_right  =  240.0
+	vbox.offset_top    = -150.0
+	vbox.offset_bottom =  150.0
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_theme_constant_override("separation", 24)
 	add_child(vbox)
@@ -65,8 +66,8 @@ func _build_ui() -> void:
 
 	_campaign_btn = Button.new()
 	_campaign_btn.text = "Continue Campaign"
-	_campaign_btn.custom_minimum_size = Vector2(180.0, 44.0)
-	_campaign_btn.pressed.connect(_on_campaign_continue_pressed)
+	_campaign_btn.custom_minimum_size = Vector2(210.0, 44.0)
+	_campaign_btn.pressed.connect(_on_campaign_btn_pressed)
 	_campaign_btn.visible = false
 	btn_row.add_child(_campaign_btn)
 
@@ -77,18 +78,44 @@ func _build_ui() -> void:
 	btn_row.add_child(quit_btn)
 
 func _on_faction_won(winning_faction: int) -> void:
-	if winning_faction == TerrainDefs.Faction.PLAYER:
-		_result_label.text = "VICTORY!"
+	_is_player_victory = (winning_faction == TerrainDefs.Faction.PLAYER)
+
+	if _is_player_victory:
 		_result_label.modulate = Color(0.35, 1.0, 0.35)
 		_sub_label.text = "The enemy stronghold has fallen."
+
 		if GameState.campaign_run_active:
 			GameState.collect_survivors()
+			GameState.campaign_retry = false
 			_play_btn.visible = false
 			_campaign_btn.visible = true
+			# Check if this was the final scenario
+			var cdef = GameState.campaign_def
+			if cdef != null and GameState.current_scenario_idx >= cdef.scenarios.size() - 1:
+				_result_label.text = "CAMPAIGN COMPLETE!"
+				_result_label.modulate = Color(1.0, 0.9, 0.1)
+				_sub_label.text = "The Black March is over. Victory is yours!"
+				_campaign_btn.text = "Return to Title"
+			else:
+				_result_label.text = "VICTORY!"
+				_campaign_btn.text = "Continue Campaign →"
+		else:
+			_result_label.text = "VICTORY!"
 	else:
 		_result_label.text = "DEFEAT"
 		_result_label.modulate = Color(1.0, 0.3, 0.3)
 		_sub_label.text = "Your stronghold has been captured."
+
+		if GameState.campaign_run_active:
+			GameState.collect_survivors()
+			GameState.campaign_retry = true
+			_play_btn.visible = false
+			_campaign_btn.visible = true
+			if GameState.difficulty_permadeath and not _has_leader_survivors():
+				_campaign_btn.text = "Campaign Over — Return to Title"
+			else:
+				_campaign_btn.text = "Retry Scenario"
+
 	if _seed_label:
 		_seed_label.text = "Map Seed: %d" % GameState.map_seed
 	visible = true
@@ -98,7 +125,33 @@ func _on_play_again_pressed() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
-func _on_campaign_continue_pressed() -> void:
-	GameState.current_scenario_idx += 1
+func _on_campaign_btn_pressed() -> void:
 	get_tree().paused = false
+
+	# Permadeath with no leaders: campaign over
+	if GameState.campaign_retry and GameState.difficulty_permadeath and not _has_leader_survivors():
+		GameState.reset()
+		get_tree().change_scene_to_file("res://scenes/ui/TitleScreen.tscn")
+		return
+
+	if _is_player_victory:
+		GameState.current_scenario_idx += 1
+		# Campaign complete: all scenarios done
+		var cdef = GameState.campaign_def
+		if cdef != null and GameState.current_scenario_idx >= cdef.scenarios.size():
+			GameState.reset()
+			get_tree().change_scene_to_file("res://scenes/ui/TitleScreen.tscn")
+			return
+
+	# Prepare the next (or same, if retrying) scenario and go to transition screen
+	GameSetupManager.prepare_campaign_scenario(GameState.current_scenario_idx)
 	get_tree().change_scene_to_file("res://scenes/ui/CampaignTransitionScreen.tscn")
+
+func _has_leader_survivors() -> bool:
+	for u in GameState.persistent_roster:
+		if not u.is_alive:
+			continue
+		var cls := UnitRegistry.get_class_def(u.class_id)
+		if cls and cls.can_lead:
+			return true
+	return false
