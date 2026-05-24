@@ -23,6 +23,8 @@ var faction_relations: Dictionary = {}
 # Which win conditions are active this run
 var active_conditions: Array[String] = ["hq_capture"]
 
+const RESERVE_CAP: int = 5
+
 var pending_map_params: MapParams = null
 var configured_squads: Array[SquadData] = []
 var last_map_params: MapParams = null

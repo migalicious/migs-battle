@@ -145,16 +145,25 @@ func _physics_process(_delta: float) -> void:
 			return
 		velocity = dir.normalized() * squad_data.move_speed
 	else:
-		if _nav_agent.is_navigation_finished():
+		if _is_on_impassable_terrain():
+			# Off the navmesh — move directly toward destination to escape
+			var dir := _destination - global_position
+			dir.y = 0.0
+			if dir.length() < 0.3:
+				_stop_moving()
+				return
+			velocity = dir.normalized() * maxf(squad_data.move_speed, 1.5)
+		elif _nav_agent.is_navigation_finished():
 			_stop_moving()
 			return
-		var next_pos := _nav_agent.get_next_path_position()
-		var dir := next_pos - global_position
-		dir.y = 0.0
-		if dir.length() > 0.05:
-			velocity = dir.normalized() * squad_data.move_speed
 		else:
-			velocity = Vector3.ZERO
+			var next_pos := _nav_agent.get_next_path_position()
+			var dir := next_pos - global_position
+			dir.y = 0.0
+			if dir.length() > 0.05:
+				velocity = dir.normalized() * squad_data.move_speed
+			else:
+				velocity = Vector3.ZERO
 
 	move_and_slide()
 	_update_terrain_speed()
@@ -219,12 +228,21 @@ func retreat_to(world_pos: Vector3) -> void:
 	if _path_line:
 		_path_line.visible = false
 
+func _is_on_impassable_terrain() -> bool:
+	if not map_manager or not squad_data:
+		return false
+	var grid := map_manager.world_to_grid(global_position)
+	var terrain := map_manager.get_terrain(grid.x, grid.y)
+	return TerrainDefs.get_speed(squad_data.get_movement_type(), terrain) == 0.0
+
 func _update_terrain_speed() -> void:
 	if not squad_data or not map_manager:
 		return
 	var grid := map_manager.world_to_grid(global_position)
 	var terrain := map_manager.get_terrain(grid.x, grid.y)
-	squad_data.recalculate_speed(terrain)
+	var mult := TerrainDefs.get_speed(squad_data.get_movement_type(), terrain)
+	if mult > 0.0:
+		squad_data.recalculate_speed(terrain)
 
 func _faction_color(f: int) -> Color:
 	return TerrainDefs.FACTION_COLORS.get(f, Color.WHITE)

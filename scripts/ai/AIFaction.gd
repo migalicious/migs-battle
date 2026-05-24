@@ -4,6 +4,7 @@ extends Node
 const _SQUAD_SCENE := preload("res://scenes/squads/Squad.tscn")
 
 @export var controlled_faction: int = TerrainDefs.Faction.ENEMY_A
+@export var difficulty_mult: float = 1.0
 
 var tick_timer: float = 0.0
 
@@ -36,6 +37,7 @@ func _initial_spawn() -> void:
 		var town: TownNode = spawn_points[i]
 		var data := _build_template(i)
 		data.squad_id = "ai_%d_%d" % [controlled_faction, i]
+		_equip_template_items(data, i)
 		var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
 		_squad_controller.add_child(sq)
 		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
@@ -52,6 +54,7 @@ func _run_ai_tick() -> void:
 			continue
 		var objective := _assign_objective(sq)
 		_execute_objective(sq, objective)
+	_consider_reinforcement()
 
 func _assign_objective(squad: Squad) -> Dictionary:
 	if _hq_under_threat():
@@ -200,7 +203,8 @@ func _template_d() -> SquadData:
 	return d
 
 func _add(data: SquadData, class_id: String, uname: String, row: int, col: int, is_leader: bool, level: int) -> void:
-	var unit := UnitRegistry.create_unit(class_id, level)
+	var scaled_level := maxi(1, int(float(level) * difficulty_mult))
+	var unit := UnitRegistry.create_unit(class_id, scaled_level)
 	if not unit:
 		return
 	unit.unit_name = uname
@@ -209,3 +213,62 @@ func _add(data: SquadData, class_id: String, uname: String, row: int, col: int, 
 	unit.faction = controlled_faction
 	unit.is_leader = is_leader
 	data.units.append(unit)
+
+# ── AI Item Assignment ────────────────────────────────────────────────────────
+
+func _equip_template_items(data: SquadData, template_idx: int) -> void:
+	for u in data.units:
+		var cls := UnitRegistry.get_class_def(u.class_id) as ClassDefinition
+		if not cls:
+			continue
+		match template_idx % 4:
+			0, 3:  # A/D: light items
+				if u.row == 0 or u.is_leader:
+					u.held_item = _pick_item(["iron_shield", "speed_boots"])
+			1:  # B: magic users
+				if u.class_id in ["mage", "sorcerer", "witch", "cleric"]:
+					u.held_item = _pick_item(["mage_robe", "silver_mail"])
+				elif u.row == 0:
+					u.held_item = "silver_mail"
+			2:  # C: heavy — leader gets power_ring + silver_mail split
+				if u.is_leader:
+					u.held_item = "power_ring"
+				elif u.row == 0:
+					u.held_item = "silver_mail"
+
+func _pick_item(options: Array) -> String:
+	return options[randi() % options.size()] as String
+
+# ── AI Reinforcement ──────────────────────────────────────────────────────────
+
+func _consider_reinforcement() -> void:
+	var current_count := GameState.get_squads_by_faction(controlled_faction).size()
+	if current_count >= GameBalance.AI_MAX_SQUADS:
+		return
+	if GameState.enemy_gold < GameBalance.AI_REINFORCE_GOLD_THRESHOLD:
+		return
+	var spawn_town := _find_unoccupied_friendly_town()
+	if not spawn_town:
+		return
+	GameState.enemy_gold -= GameBalance.AI_REINFORCE_GOLD_THRESHOLD
+	var template_idx := randi() % 4
+	var data := _build_template(template_idx)
+	data.squad_id = "ai_%d_reinf_%d" % [controlled_faction, Time.get_ticks_msec()]
+	_equip_template_items(data, template_idx)
+	var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
+	_squad_controller.add_child(sq)
+	sq.global_position = Vector3(spawn_town.global_position.x, 0.5, spawn_town.global_position.z + 2.0)
+	sq.setup(data)
+	_squad_controller.wire_squad(sq)
+
+func _find_unoccupied_friendly_town() -> TownNode:
+	for town in _map_manager.get_towns_by_faction(controlled_faction):
+		if not is_instance_valid(town.garrisoned_squad):
+			var occupied := false
+			for sq in GameState.get_squads_by_faction(controlled_faction):
+				if is_instance_valid(sq) and sq.global_position.distance_to(town.global_position) < 2.0:
+					occupied = true
+					break
+			if not occupied:
+				return town
+	return null

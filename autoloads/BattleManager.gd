@@ -36,6 +36,8 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 		var _dg := _mm.world_to_grid(sq_b.global_position)
 		atk_on_water = _mm.get_terrain(_ag.x, _ag.y) == _WATER
 		def_on_water = _mm.get_terrain(_dg.x, _dg.y) == _WATER
+	_heal_wounded_before_battle(sq_a.squad_data)
+	_heal_wounded_before_battle(sq_b.squad_data)
 	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data, atk_on_water, def_on_water)
 	_precompute_level_ups(_current_result)
 	battle_started.emit(sq_a.squad_data, sq_b.squad_data)
@@ -79,12 +81,21 @@ func _apply_result() -> void:
 	else:
 		_current_defender.in_battle = false
 
+func _heal_wounded_before_battle(data: SquadData) -> void:
+	for u in data.units:
+		if u.is_alive and u.is_wounded:
+			u.hp = u.max_hp
+
 func _apply_unit_states(data: SquadData, states: Array[UnitData]) -> void:
 	for state in states:
 		for unit in data.units:
 			if unit.unit_name == state.unit_name:
 				unit.hp = state.hp
 				unit.is_alive = state.is_alive
+				if unit.is_alive:
+					unit.is_wounded = float(unit.hp) / float(maxi(unit.max_hp, 1)) < 0.25
+				else:
+					unit.is_wounded = false
 				break
 
 func _grant_xp(data: SquadData, total_xp: int) -> void:

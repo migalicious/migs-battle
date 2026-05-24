@@ -348,6 +348,8 @@ static func _make_skill_atk(skill) -> AttackDefinition:
 	return a
 
 static func _calculate_damage(attacker: UnitData, target: UnitData, atk_def: AttackDefinition, mult: float = 1.0) -> int:
+	if attacker.is_wounded:
+		mult *= 0.8
 	var stat: float
 	var defense: float
 	if atk_def.damage_type == TerrainDefs.DamageType.PHYSICAL:

@@ -27,6 +27,7 @@ extends Resource
 # State flags
 @export var is_alive: bool = true
 @export var is_leader: bool = false
+@export var is_wounded: bool = false
 @export var held_item: String = ""
 
 # Populated by UnitRegistry after creation; not serialized

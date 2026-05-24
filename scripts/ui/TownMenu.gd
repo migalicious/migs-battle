@@ -3,6 +3,7 @@ extends Panel
 
 signal deploy_requested(squad_data: SquadData, town: TownNode)
 signal ungarrison_requested(town: TownNode)
+signal merge_requested(source: Squad, target: Squad)
 signal closed()
 
 var _current_town: TownNode = null
@@ -126,6 +127,13 @@ func _build_friendly_body(reserve: Array) -> void:
 		_body_vbox.add_child(recruit_btn)
 		_body_vbox.add_child(HSeparator.new())
 
+	var manage_btn := Button.new()
+	manage_btn.text = "Manage Army"
+	manage_btn.pressed.connect(_on_manage_army_pressed)
+	_body_vbox.add_child(manage_btn)
+
+	_body_vbox.add_child(HSeparator.new())
+
 	var shop_btn := Button.new()
 	shop_btn.text = "Shop"
 	shop_btn.pressed.connect(_on_shop_pressed)
@@ -187,6 +195,106 @@ func _get_all_player_units() -> Array:
 			for u in (sd as SquadData).get_alive_units():
 				result.append(u)
 	return result
+
+# ── Manage Army ───────────────────────────────────────────────────────────
+
+func _on_manage_army_pressed() -> void:
+	for c in _body_vbox.get_children():
+		c.queue_free()
+	call_deferred("_build_manage_army_body")
+
+func _build_manage_army_body() -> void:
+	var hdr := Label.new()
+	hdr.text = "MANAGE ARMY"
+	hdr.add_theme_font_size_override("font_size", 13)
+	_body_vbox.add_child(hdr)
+	_body_vbox.add_child(HSeparator.new())
+
+	var town_pos := _current_town.global_position
+	var nearby_range := 4.0  # cell_size(2.0) * 2
+	var mm := _get_map_manager()
+	if mm:
+		nearby_range = mm.cell_size * 2.0
+
+	# Gather squads: garrison + nearby player squads
+	var squads_here: Array[Squad] = []
+	if _current_town.garrisoned_squad and is_instance_valid(_current_town.garrisoned_squad):
+		squads_here.append(_current_town.garrisoned_squad)
+	for sq in GameState.player_squads:
+		if not is_instance_valid(sq):
+			continue
+		if sq == _current_town.garrisoned_squad:
+			continue
+		if sq.global_position.distance_to(town_pos) <= nearby_range:
+			squads_here.append(sq as Squad)
+
+	if squads_here.is_empty():
+		var no_lbl := Label.new()
+		no_lbl.text = "(No squads at this town)"
+		no_lbl.add_theme_font_size_override("font_size", 10)
+		_body_vbox.add_child(no_lbl)
+	else:
+		for sq in squads_here:
+			var leader := sq.squad_data.get_leader()
+			var alive := sq.squad_data.get_alive_units().size()
+			var total := sq.squad_data.units.size()
+			var is_gar := sq == _current_town.garrisoned_squad
+			var lbl := Label.new()
+			lbl.text = "%s%s  (%d/%d alive)" % [
+				"[G] " if is_gar else "", leader.unit_name if leader else "???", alive, total]
+			lbl.add_theme_font_size_override("font_size", 11)
+			_body_vbox.add_child(lbl)
+
+		_body_vbox.add_child(HSeparator.new())
+
+		# Merge buttons: each squad can be merged into another
+		if squads_here.size() >= 2:
+			var merge_hdr := Label.new()
+			merge_hdr.text = "Merge:"
+			merge_hdr.add_theme_font_size_override("font_size", 11)
+			_body_vbox.add_child(merge_hdr)
+			for src in squads_here:
+				for tgt in squads_here:
+					if src == tgt:
+						continue
+					var src_leader := src.squad_data.get_leader()
+					var tgt_leader := tgt.squad_data.get_leader()
+					var empty_slots := _count_empty_slots(tgt.squad_data)
+					if empty_slots == 0:
+						continue
+					var btn := Button.new()
+					btn.text = "%s → %s" % [
+						src_leader.unit_name if src_leader else "???",
+						tgt_leader.unit_name if tgt_leader else "???"]
+					btn.pressed.connect(_on_merge_pressed.bind(src, tgt))
+					_body_vbox.add_child(btn)
+
+	_body_vbox.add_child(HSeparator.new())
+	var back_btn := Button.new()
+	back_btn.text = "Back"
+	back_btn.pressed.connect(func() -> void:
+		for c in _body_vbox.get_children(): c.queue_free()
+		call_deferred("_build_friendly_body", GameState.reserve_squads))
+	_body_vbox.add_child(back_btn)
+
+func _count_empty_slots(data: SquadData) -> int:
+	var occupied: Dictionary = {}
+	for u in data.units:
+		if u.is_alive:
+			occupied[Vector2i(u.row, u.col)] = true
+	var empty := 0
+	for r in [0, 1]:
+		for c in [0, 1, 2]:
+			if not occupied.has(Vector2i(r, c)):
+				empty += 1
+	return empty
+
+func _on_merge_pressed(source: Squad, target: Squad) -> void:
+	merge_requested.emit(source, target)
+	close()
+
+func _get_map_manager() -> MapManager:
+	return get_tree().current_scene.get_node_or_null("MapManager") as MapManager
 
 # ── Shop ──────────────────────────────────────────────────────────────────────
 

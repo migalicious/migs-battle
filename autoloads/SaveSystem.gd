@@ -129,6 +129,7 @@ func _serialize_unit(u: UnitData) -> Dictionary:
 		"xp_to_next":   u.xp_to_next,
 		"is_alive":     u.is_alive,
 		"is_leader":    u.is_leader,
+		"is_wounded":   u.is_wounded,
 		"held_item":    u.held_item,
 	}
 
@@ -161,6 +162,7 @@ func deserialize_unit(d: Dictionary) -> UnitData:
 	u.xp_to_next   = d.get("xp_to_next",   100)
 	u.is_alive     = d.get("is_alive",     true)
 	u.is_leader    = d.get("is_leader",    false)
+	u.is_wounded   = d.get("is_wounded",   false)
 	u.held_item    = d.get("held_item",    "")
 	return u
 

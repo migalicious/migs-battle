@@ -24,6 +24,7 @@ func _init_refs() -> void:
 			_town_menu = hud.get_node("TownMenu") as TownMenu
 			_town_menu.deploy_requested.connect(_on_deploy_requested)
 			_town_menu.ungarrison_requested.connect(_on_ungarrison_requested)
+			_town_menu.merge_requested.connect(_on_merge_requested)
 	_connect_town_signals()
 	_spawn_squads()
 
@@ -189,7 +190,7 @@ func _show_cant_afford(pos: Vector3, cost: int) -> void:
 	lbl.font_size = 16
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.modulate = Color(1.0, 0.3, 0.3)
-	lbl.global_position = Vector3(pos.x, 2.5, pos.z)
+	lbl.position = Vector3(pos.x, 2.5, pos.z)
 	add_child(lbl)
 	var tween := create_tween()
 	tween.tween_property(lbl, "modulate:a", 0.0, 1.0)
@@ -212,6 +213,62 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 	sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 1.5)
 	sq.setup(squad_data)
 	wire_squad(sq)
+
+# ── Squad Merge ───────────────────────────────────────────────────────────────
+
+func _on_merge_requested(source: Squad, target: Squad) -> void:
+	if not is_instance_valid(source) or not is_instance_valid(target):
+		return
+	_merge_squads(source, target)
+
+func _merge_squads(source: Squad, target: Squad) -> void:
+	var occupied: Dictionary = {}
+	for u in target.squad_data.units:
+		if u.is_alive:
+			occupied[Vector2i(u.row, u.col)] = true
+
+	var empty_slots: Array[Vector2i] = []
+	for r in [0, 1]:
+		for c in [0, 1, 2]:
+			if not occupied.has(Vector2i(r, c)):
+				empty_slots.append(Vector2i(r, c))
+
+	var alive_units := source.squad_data.get_alive_units()
+	var overflow: Array[UnitData] = []
+	for i in range(alive_units.size()):
+		var u: UnitData = alive_units[i]
+		if i < empty_slots.size():
+			u.row = empty_slots[i].x
+			u.col = empty_slots[i].y
+			u.faction = target.squad_data.faction
+			target.squad_data.units.append(u)
+		else:
+			overflow.append(u)
+
+	# Ensure target still has a leader; if not, promote first alive unit
+	if not target.squad_data.get_leader():
+		var first_alive := target.squad_data.get_alive_units()
+		if not first_alive.is_empty():
+			(first_alive[0] as UnitData).is_leader = true
+
+	# Overflow: add to reserve if there's room
+	if not overflow.is_empty():
+		var overflow_sd := SquadData.new()
+		overflow_sd.squad_id = "overflow_%d" % Time.get_ticks_msec()
+		overflow_sd.faction = source.squad_data.faction
+		for u in overflow:
+			overflow_sd.units.append(u)
+		if GameState.reserve_squads.size() < GameState.RESERVE_CAP:
+			GameState.reserve_squads.append(overflow_sd)
+
+	# If source was garrisoned, clear it from the town
+	if source.is_garrisoned and source.garrison_town:
+		source.garrison_town.clear_garrison()
+
+	GameState.unregister_squad(source)
+	source.queue_free()
+
+	target.squad_data.recalculate_speed(TerrainDefs.TerrainType.PLAINS)
 
 # ── Ungarrison ────────────────────────────────────────────────────────────────
 
@@ -299,7 +356,7 @@ func _show_cant_go_there(world_pos: Vector3) -> void:
 	lbl.font_size = 16
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.modulate = Color(1.0, 0.35, 0.35)
-	lbl.global_position = Vector3(world_pos.x, 1.0, world_pos.z)
+	lbl.position = Vector3(world_pos.x, 1.0, world_pos.z)
 	add_child(lbl)
 	var tween := create_tween()
 	tween.tween_property(lbl, "modulate:a", 0.0, 0.7)

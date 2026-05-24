@@ -141,6 +141,14 @@ func _populate_slot(slot: Control, unit: UnitData) -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_row.add_child(spacer)
 
+	if unit.is_wounded:
+		var wound_lbl := Label.new()
+		wound_lbl.text = "~"
+		wound_lbl.add_theme_font_size_override("font_size", 11)
+		wound_lbl.modulate = Color(0.9, 0.55, 0.1)
+		wound_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		top_row.add_child(wound_lbl)
+
 	var lv_lbl := Label.new()
 	lv_lbl.text = "L%d" % unit.level
 	lv_lbl.add_theme_font_size_override("font_size", 9)
