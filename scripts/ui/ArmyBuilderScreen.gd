@@ -26,6 +26,7 @@ var _roster_vbox: VBoxContainer = null
 var _error_label: Label = null
 var _start_btn: Button = null
 var _popup: UnitDetailPopup = null
+var _banner_lbl: Label = null
 
 func _ready() -> void:
 	_build_ui()
@@ -83,6 +84,32 @@ func setup_from_roster(roster: Array[UnitData]) -> void:
 	_squads = []
 	_add_squad()
 	_refresh()
+	_show_levelup_banners(roster)
+
+func _show_levelup_banners(roster: Array[UnitData]) -> void:
+	var prev: Dictionary = GameState.pre_scenario_levels
+	if prev.is_empty():
+		return
+	var notices: Array[String] = []
+	for u in roster:
+		var old_level: int = prev.get(u.unit_name, u.level)
+		if u.level > old_level:
+			notices.append("%s: Level %d → %d!" % [u.unit_name, old_level, u.level])
+	if notices.is_empty():
+		return
+	if _banner_lbl == null:
+		_banner_lbl = Label.new()
+		_banner_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_banner_lbl.add_theme_font_size_override("font_size", 14)
+		_banner_lbl.modulate = Color(0.4, 1.0, 0.5)
+		_banner_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		add_child(_banner_lbl)
+		# Position above the roster, anchored to top
+		_banner_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		_banner_lbl.offset_top = 4.0
+		_banner_lbl.offset_bottom = 32.0
+	_banner_lbl.text = "  ".join(notices)
+	_banner_lbl.visible = true
 
 func _build_unit_pool(scenario) -> Array[UnitData]:
 	var pool: Array[UnitData] = []

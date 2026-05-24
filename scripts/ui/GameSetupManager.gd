@@ -32,7 +32,7 @@ func _on_back_requested() -> void:
 func start_campaign() -> void:
 	GameState.reset()
 	GameState.campaign_run_active = true
-	GameState.campaign_def = _CampaignDef.build_default()
+	GameState.campaign_def = _make_campaign_def()
 	get_tree().change_scene_to_file("res://scenes/ui/DifficultyScreen.tscn")
 
 func on_difficulty_chosen(permadeath: bool) -> void:
@@ -43,7 +43,7 @@ func on_campaign_begun() -> void:
 	_start_campaign_scenario(0)
 
 func _start_campaign_scenario(idx: int) -> void:
-	var campaign := _ensure_campaign_def()
+	var campaign: Variant = _ensure_campaign_def()
 	GameState.current_scenario_idx = idx
 
 	if idx < campaign.scenarios.size():
@@ -59,17 +59,31 @@ func _start_campaign_scenario(idx: int) -> void:
 				GameState.persistent_roster.append(unit)
 		GameState.player_gold = int(campaign.starting_gold)
 
+	# Snapshot current roster levels so ArmyBuilder can detect who leveled up
+	GameState.pre_scenario_levels = {}
+	for u in GameState.persistent_roster:
+		GameState.pre_scenario_levels[u.unit_name] = u.level
+
 	get_tree().change_scene_to_file("res://scenes/ui/ArmyBuilderScreen.tscn")
 
 func prepare_campaign_scenario(idx: int) -> void:
-	var campaign := _ensure_campaign_def()
+	var campaign: Variant = _ensure_campaign_def()
 	GameState.current_scenario_idx = idx
 	if idx < campaign.scenarios.size():
 		_apply_scenario(campaign.scenarios[idx])
+	# Snapshot roster levels so ArmyBuilder can highlight who leveled up
+	GameState.pre_scenario_levels = {}
+	for u in GameState.persistent_roster:
+		GameState.pre_scenario_levels[u.unit_name] = u.level
+
+func _make_campaign_def():
+	var c := _CampaignDef.new()
+	c.build_default()
+	return c
 
 func _ensure_campaign_def():
 	if GameState.campaign_def == null:
-		GameState.campaign_def = _CampaignDef.build_default()
+		GameState.campaign_def = _make_campaign_def()
 	return GameState.campaign_def
 
 func _apply_scenario(scenario) -> void:

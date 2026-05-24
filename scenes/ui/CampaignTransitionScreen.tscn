@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://campaigntransscn1"]
+[gd_scene format=3 uid="uid://bka825spkvvfg"]
 
 [ext_resource type="Script" path="res://scripts/ui/CampaignTransitionScreen.gd" id="1_script"]
 

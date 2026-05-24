@@ -8,12 +8,13 @@ const _ScenarioDef = preload("res://scripts/campaign/ScenarioDef.gd")
 @export var starting_units: Array = []     # Array of Dictionary {class_id, unit_name, level}
 @export var starting_gold: int = 150
 
-static func build_default() -> CampaignDef:
-	var c := CampaignDef.new()
-	c.campaign_name = "The Black March"
-	c.starting_gold = 150
+# Instance method: populate this CampaignDef with the default "The Black March" campaign data.
+# Callers: _CampaignDef.new().build_default()
+func build_default() -> void:
+	campaign_name = "The Black March"
+	starting_gold = 150
 
-	c.starting_units = [
+	starting_units = [
 		{"class_id": "knight",  "unit_name": "Roland",  "level": 4},
 		{"class_id": "archer",  "unit_name": "Sylvia",  "level": 3},
 		{"class_id": "mage",    "unit_name": "Merlin",  "level": 3},
@@ -22,7 +23,7 @@ static func build_default() -> CampaignDef:
 		{"class_id": "archer",  "unit_name": "Isolde",  "level": 2},
 	]
 
-	c.scenarios = [
+	scenarios = [
 		_make(0, "Border Skirmish",
 			"A small border dispute. Test your forces against the Vanguard.",
 			112233, 24, 24, 4, 1, [0, 1], "hostile_all", ["hq_capture"]),
@@ -42,16 +43,15 @@ static func build_default() -> CampaignDef:
 			"The last stand. Your army against the world.",
 			303030, 48, 48, 10, 4, [0, 1, 2, 3], "free_for_all", ["all_strongholds"]),
 	]
-	return c
 
-static func _make(idx: int, sname: String, desc: String,
-		seed: int, w: int, h: int, towns: int, castles: int,
-		factions: Array, preset: String, wins: Array) -> ScenarioDef:
+func _make(idx: int, sname: String, desc: String,
+		map_seed_val: int, w: int, h: int, towns: int, castles: int,
+		factions: Array, preset: String, wins: Array):
 	var s := _ScenarioDef.new()
 	s.scenario_idx = idx
 	s.scenario_name = sname
 	s.description = desc
-	s.map_seed = seed
+	s.map_seed = map_seed_val
 	s.map_width = w
 	s.map_height = h
 	s.num_towns = towns

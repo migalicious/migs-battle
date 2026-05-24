@@ -204,7 +204,7 @@ func _build_default_classes() -> void:
 	sorcerer.def_growth = Vector2i(1,2); sorcerer.res_growth = Vector2i(4,5)
 	sorcerer.movement_type = INF; sorcerer.base_move_speed = 3.0; sorcerer.can_lead = true; sorcerer.deploy_cost = 120
 	sorcerer.front_attacks = [_atk("Staff", P, 1, 0.6, FR)]
-	sorcerer.back_attacks  = [_atk("Arcane Blast", DARK, 2, 1.5, FR, true)]
+	sorcerer.back_attacks  = [_atk("Arcane Blast", DARK, 2, 1.5, ANY, true)]
 	sorcerer.skills        = [_skill("drain_life", "Drain Life", "Restores 8% HP after each attack.", 0, 2, 1.0, 0.08)]
 	sorcerer.promotions    = []
 	_reg(sorcerer)

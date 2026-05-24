@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://difficultyscreen1s"]
+[gd_scene format=3 uid="uid://bw3dbrxeiyhmg"]
 
 [ext_resource type="Script" path="res://scripts/ui/DifficultyScreen.gd" id="1_script"]
 

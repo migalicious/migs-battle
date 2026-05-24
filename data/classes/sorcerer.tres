@@ -11,6 +11,7 @@ attack_name = "Arcane Blast"
 damage_type = 5
 hits = 2
 power_multiplier = 1.5
+targets_row = 2
 hits_all_in_column = true
 
 [sub_resource type="Resource" id="Resource_7mkys"]

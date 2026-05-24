@@ -239,6 +239,31 @@ func _handle(raw: String) -> void:
 			for cd_id in UnitRegistry._classes:
 				cd_list.append(_class_dict(UnitRegistry._classes[cd_id] as ClassDefinition))
 			_send({"classes": cd_list})
+		"debug_atk_row":
+			var cls_id := str(d.get("class_id", "sorcerer"))
+			var side := str(d.get("side", "back"))  # "front" or "back"
+			if not UnitRegistry._classes.has(cls_id):
+				_send({"error": "unknown class"})
+			else:
+				var cls := UnitRegistry._classes[cls_id] as ClassDefinition
+				var attacks: Array = cls.back_attacks if side == "back" else cls.front_attacks
+				if attacks.is_empty():
+					_send({"error": "no attacks"})
+				else:
+					var a := attacks[0] as AttackDefinition
+					var tr_raw = a.targets_row
+					_send({
+						"class_id": cls_id, "side": side,
+						"attack_name": a.attack_name,
+						"targets_row_raw": tr_raw,
+						"targets_row_int": int(tr_raw),
+						"is_front": tr_raw == TerrainDefs.TargetRow.FRONT,
+						"is_back": tr_raw == TerrainDefs.TargetRow.BACK,
+						"is_any": tr_raw == TerrainDefs.TargetRow.ANY,
+						"front_val": int(TerrainDefs.TargetRow.FRONT),
+						"back_val": int(TerrainDefs.TargetRow.BACK),
+						"any_val": int(TerrainDefs.TargetRow.ANY),
+					})
 		"inject_unit":
 			var iu_class := str(d.get("class_id", "fighter"))
 			var iu_level: int = int(d.get("level", 1))
@@ -317,6 +342,92 @@ func _handle(raw: String) -> void:
 							(ct_town as TownNode).set_faction(ct_faction)
 							break
 				_send({"ok": true, "town_id": ct_id, "faction": ct_faction})
+		"start_campaign":
+			# Set up a campaign run at the given scenario index and go to Main
+			var sc_idx: int = int(d.get("scenario_idx", 0))
+			var permadeath: bool = bool(d.get("permadeath", false))
+			GameState.reset()
+			GameState.campaign_run_active = true
+			GameState.difficulty_permadeath = permadeath
+			const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
+			var _sc_cd := _CampaignDef.new()
+			_sc_cd.build_default()
+			GameState.campaign_def = _sc_cd
+			GameState.current_scenario_idx = sc_idx
+			# Build starting roster for scenario 0, or stub minimal roster for later
+			var sc_campaign = GameState.campaign_def
+			if sc_idx == 0:
+				GameState.persistent_roster = []
+				for entry in sc_campaign.starting_units:
+					var sc_unit := UnitRegistry.create_unit(str(entry["class_id"]), int(entry["level"]))
+					if sc_unit:
+						sc_unit.unit_name = str(entry["unit_name"])
+						sc_unit.faction = TerrainDefs.Faction.PLAYER
+						GameState.persistent_roster.append(sc_unit)
+				GameState.player_gold = int(sc_campaign.starting_gold)
+			if sc_idx < sc_campaign.scenarios.size():
+				var sc_def = sc_campaign.scenarios[sc_idx]
+				var sc_params := MapParams.new()
+				sc_params.map_seed = int(sc_def.map_seed)
+				sc_params.width = int(sc_def.map_width)
+				sc_params.height = int(sc_def.map_height)
+				sc_params.num_towns = int(sc_def.num_towns)
+				sc_params.num_castles = int(sc_def.num_castles)
+				var sc_factions: Array[int] = []
+				for f in sc_def.active_factions:
+					sc_factions.append(int(f))
+				sc_params.active_factions = sc_factions
+				GameState.pending_map_params = sc_params
+				GameState.active_factions = sc_factions
+				GameState._init_default_relations()
+				GameState.active_conditions = []
+				for wc in sc_def.win_conditions:
+					GameState.active_conditions.append(str(wc))
+			# Build a default squad from roster if no configured squads yet
+			if GameState.persistent_roster.size() > 0:
+				var sc_squad := SquadData.new()
+				sc_squad.squad_id = "player_squad_0"
+				sc_squad.faction = TerrainDefs.Faction.PLAYER
+				for sc_u in GameState.persistent_roster.slice(0, mini(6, GameState.persistent_roster.size())):
+					var sc_uu := sc_u as UnitData
+					sc_uu.faction = TerrainDefs.Faction.PLAYER
+					sc_squad.units.append(sc_uu)
+				GameState.configured_squads = [sc_squad]
+			get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+			_send({"ok": true, "scenario_idx": sc_idx})
+		"get_campaign_state":
+			var roster_info: Array = []
+			for rc_u in GameState.persistent_roster:
+				var rc_ud := rc_u as UnitData
+				roster_info.append({"name": rc_ud.unit_name, "class_id": rc_ud.class_id, "level": rc_ud.level, "hp": rc_ud.hp, "max_hp": rc_ud.max_hp, "is_alive": rc_ud.is_alive, "is_wounded": rc_ud.is_wounded})
+			_send({
+				"campaign_run_active": GameState.campaign_run_active,
+				"current_scenario_idx": GameState.current_scenario_idx,
+				"difficulty_permadeath": GameState.difficulty_permadeath,
+				"campaign_retry": GameState.campaign_retry,
+				"roster_size": GameState.persistent_roster.size(),
+				"roster": roster_info,
+				"player_gold": GameState.player_gold,
+			})
+		"advance_scenario":
+			# Force advance to next scenario without going through VictoryScreen
+			if not GameState.campaign_run_active:
+				_send({"error": "no active campaign"})
+			else:
+				GameState.collect_survivors()
+				GameState.campaign_retry = false
+				GameState.current_scenario_idx += 1
+				const _CampaignDefAdv = preload("res://scripts/campaign/CampaignDef.gd")
+				if GameState.campaign_def == null:
+					var _adv_cd := _CampaignDefAdv.new()
+					_adv_cd.build_default()
+					GameState.campaign_def = _adv_cd
+				var adv_cdef = GameState.campaign_def
+				if GameState.current_scenario_idx >= adv_cdef.scenarios.size():
+					_send({"error": "already at final scenario"})
+				else:
+					GameSetupManager.prepare_campaign_scenario(GameState.current_scenario_idx)
+					_send({"ok": true, "new_scenario_idx": GameState.current_scenario_idx})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -360,16 +471,21 @@ func _take_screenshot(path: String) -> void:
 func _build_state() -> Dictionary:
 	var scene := get_tree().current_scene
 	var vp := get_viewport()
+	var lmp := GameState.last_map_params
 	return {
 		"scene": str(scene.name) if scene else "",
 		"phase": GameState.current_phase,
 		"map_seed": GameState.map_seed,
+		"map_width":  lmp.width  if lmp else 0,
+		"map_height": lmp.height if lmp else 0,
 		"player_gold": GameState.player_gold,
 		"player_squads": GameState.player_squads.size(),
 		"enemy_squads": GameState.enemy_squads.size(),
 		"reserve_squads": GameState.reserve_squads.size(),
 		"active_conditions": GameState.active_conditions,
 		"town_ownership": GameState.town_ownership,
+		"campaign_run_active": GameState.campaign_run_active,
+		"current_scenario_idx": GameState.current_scenario_idx,
 		"window_size": [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y],
 		"viewport_size": [vp.get_visible_rect().size.x, vp.get_visible_rect().size.y],
 		"content_scale": DisplayServer.screen_get_scale(),

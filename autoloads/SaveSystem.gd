@@ -122,7 +122,9 @@ func load_game() -> void:
 		GameState.persistent_roster = []
 		for ud in roster_raw:
 			GameState.persistent_roster.append(deserialize_unit(ud))
-		GameState.campaign_def = _CampaignDef.build_default()
+		var _ss_cd := _CampaignDef.new()
+		_ss_cd.build_default()
+		GameState.campaign_def = _ss_cd
 
 	GameState.is_loading_save   = true
 	GameState.pending_map_params = p

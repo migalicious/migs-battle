@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://campaignintroscn1"]
+[gd_scene format=3 uid="uid://bka8q2dtgvvfg"]
 
 [ext_resource type="Script" path="res://scripts/ui/CampaignIntroScreen.gd" id="1_script"]
 
