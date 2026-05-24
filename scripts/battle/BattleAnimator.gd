@@ -3,7 +3,8 @@ extends CanvasLayer
 
 signal battle_completed()
 
-const DELAY: float = 0.35
+const DELAYS: Array = [0.35, 0.12, 0.0]
+const PREF_PATH := "user://preferences.cfg"
 
 var _attacker: SquadData = null
 var _defender: SquadData = null
@@ -15,7 +16,14 @@ var _def_slots: Dictionary = {}
 
 var _log_rtl: RichTextLabel = null
 var _banner_lbl: Label = null
+var _speed_btn: Button = null
 var _continue_btn: Button = null
+var _speed_mode: int = 0
+
+func _ready() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(PREF_PATH) == OK:
+		_speed_mode = clampi(cfg.get_value("battle", "speed_mode", 0), 0, 2)
 
 func start(attacker: SquadData, defender: SquadData, result: BattleResult) -> void:
 	_attacker = attacker
@@ -92,12 +100,22 @@ func _build_ui() -> void:
 	_banner_lbl.visible = false
 	vbox.add_child(_banner_lbl)
 
-	# Continue button
+	# Footer: speed toggle + continue
+	var footer := HBoxContainer.new()
+	vbox.add_child(footer)
+
+	_speed_btn = Button.new()
+	_speed_btn.text = ["1×", "2×", "Skip"][_speed_mode]
+	_speed_btn.custom_minimum_size = Vector2(60.0, 0.0)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	footer.add_child(_speed_btn)
+
 	_continue_btn = Button.new()
 	_continue_btn.text = "Continue"
+	_continue_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_continue_btn.visible = false
 	_continue_btn.pressed.connect(_on_continue_pressed)
-	vbox.add_child(_continue_btn)
+	footer.add_child(_continue_btn)
 
 func _build_grid(squad: SquadData, slots: Dictionary) -> GridContainer:
 	var grid := GridContainer.new()
@@ -157,9 +175,13 @@ func _play() -> void:
 	_show_result()
 
 func _animate_battle() -> void:
-	for action in _result.action_log:
-		await get_tree().create_timer(DELAY).timeout
-		_process_action(action as BattleAction)
+	if _speed_mode == 2:
+		for action in _result.action_log:
+			_process_action(action as BattleAction)
+	else:
+		for action in _result.action_log:
+			await get_tree().create_timer(DELAYS[_speed_mode]).timeout
+			_process_action(action as BattleAction)
 
 func _process_action(action: BattleAction) -> void:
 	var all_slots: Dictionary = {}
@@ -294,6 +316,14 @@ func _show_result() -> void:
 	_banner_lbl.text = banner
 	_banner_lbl.visible = true
 	_continue_btn.visible = true
+
+func _on_speed_btn_pressed() -> void:
+	_speed_mode = (_speed_mode + 1) % 3
+	_speed_btn.text = ["1×", "2×", "Skip"][_speed_mode]
+	var cfg := ConfigFile.new()
+	cfg.load(PREF_PATH)
+	cfg.set_value("battle", "speed_mode", _speed_mode)
+	cfg.save(PREF_PATH)
 
 func _on_continue_pressed() -> void:
 	battle_completed.emit()
