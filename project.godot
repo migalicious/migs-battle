@@ -16,12 +16,6 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 config/main_scene="res://scenes/ui/TitleScreen.tscn"
 
-[display]
-
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/size/mode=2
-
 [autoload]
 
 GameBalance="*res://scripts/GameBalance.gd"
@@ -32,6 +26,12 @@ GameState="*res://autoloads/GameState.gd"
 GameSetupManager="*res://scripts/ui/GameSetupManager.gd"
 DebugServer="*res://autoloads/DebugServer.gd"
 SaveSystem="*res://autoloads/SaveSystem.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=2
 
 [physics]
 

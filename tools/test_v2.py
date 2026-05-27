@@ -583,6 +583,50 @@ def test_permadeath_logic():
 
 
 # ────────────────────────────────────────────────────────────
+# 20. Diplomacy System
+# ────────────────────────────────────────────────────────────
+
+def test_diplomacy():
+    header("20. Diplomacy System")
+    # Game is already on Main scene from previous test — no scene change needed
+
+    # Initial relations
+    rels = get_relations()
+    check("get_relations endpoint works", "relations" in rels, str(rels))
+    check("active_factions present", "active_factions" in rels, str(rels))
+
+    # Force ENEMY_A → PLAYER to ALLIED
+    result = trigger_diplomacy(1, 0, 2)  # 2 = ALLIED
+    check("trigger_diplomacy returns ok", result.get("ok") is True, str(result))
+    check("trigger_diplomacy echoes relation", result.get("relation") == 2,
+          f'relation={result.get("relation")}')
+
+    # Verify relation persisted in GameState (key is min_max normalized)
+    rels2 = get_relations()
+    key = "0_1"
+    check("Relation updated to ALLIED (2)", rels2.get("relations", {}).get(key) == 2,
+          f'relations={rels2.get("relations")}')
+
+    # Force back to HOSTILE and verify
+    trigger_diplomacy(1, 0, 0)
+    rels3 = get_relations()
+    check("Relation restored to HOSTILE (0)", rels3.get("relations", {}).get(key) == 0,
+          f'relations={rels3.get("relations")}')
+
+    # ENEMY_B → PLAYER: test neutral relation
+    trigger_diplomacy(2, 0, 1)  # 1 = NEUTRAL_REL
+    rels4 = get_relations()
+    key2 = "0_2"
+    check("Neutral relation (1) stored correctly",
+          rels4.get("relations", {}).get(key2) == 1,
+          f'relations={rels4.get("relations")}')
+
+    # Restore to hostile
+    trigger_diplomacy(2, 0, 0)
+    trigger_diplomacy(1, 0, 0)
+
+
+# ────────────────────────────────────────────────────────────
 # Summary
 # ────────────────────────────────────────────────────────────
 
@@ -643,6 +687,7 @@ if __name__ == "__main__":
     test_scenario_data()
     test_wounded_units()
     test_permadeath_logic()
+    test_diplomacy()
 
     # Restore to a standard random-map game for clean exit
     setup_game()

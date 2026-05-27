@@ -52,17 +52,20 @@ func _draw() -> void:
 		var pz: float = town.town_data.grid_z * cell_px + cell_px * 0.5
 		draw_circle(Vector2(px, pz), maxf(cell_px * 0.9, 3.0), _faction_color(town.faction))
 
-	# Player squads
-	for sq in GameState.player_squads:
-		if not is_instance_valid(sq):
-			continue
-		draw_circle(_world_to_mm(sq.global_position, W, H), 3.5, Color(0.20, 0.40, 0.90))
-
-	# Enemy squads
-	for sq in GameState.enemy_squads:
-		if not is_instance_valid(sq):
-			continue
-		draw_circle(_world_to_mm(sq.global_position, W, H), 3.5, Color(1.0, 0.30, 0.30))
+	# Squad dots — colored by relation to player
+	for faction in GameState.faction_squads:
+		var f := int(faction)
+		var dot_color: Color
+		if f == TerrainDefs.Faction.PLAYER:
+			dot_color = TerrainDefs.FACTION_COLORS.get(f, Color.WHITE)
+		elif GameState.are_hostile(f, TerrainDefs.Faction.PLAYER):
+			dot_color = TerrainDefs.FACTION_COLORS.get(f, Color(0.8, 0.2, 0.2))
+		else:
+			dot_color = Color(0.3, 0.85, 0.4)  # allied factions shown in green
+		for sq in GameState.faction_squads[faction]:
+			if not is_instance_valid(sq):
+				continue
+			draw_circle(_world_to_mm(sq.global_position, W, H), 3.5, dot_color)
 
 	# Camera viewport approximation
 	if _camera:

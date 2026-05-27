@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://main"]
+[gd_scene load_steps=13 format=3 uid="uid://main"]
 
 [ext_resource type="PackedScene" path="res://scenes/map/MapManager.tscn" id="1_map"]
 [ext_resource type="Script" path="res://scripts/ui/CameraController.gd" id="2_cam"]
@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/TopBar.tscn" id="8_topbar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/MinimapPanel.tscn" id="9_mm"]
 [ext_resource type="PackedScene" path="res://scenes/ui/UnitDetailPopup.tscn" id="10_udp"]
+[ext_resource type="Script" path="res://scripts/diplomacy/DiplomacyManager.gd" id="12_diplom"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("11_main")
@@ -39,5 +40,8 @@ script = ExtResource("2_cam")
 [node name="UnitDetailPopup" parent="HUD" instance=ExtResource("10_udp")]
 
 [node name="MinimapPanel" parent="HUD" instance=ExtResource("9_mm")]
+
+[node name="DiplomacyManager" type="Node" parent="."]
+script = ExtResource("12_diplom")
 
 [node name="VictoryScreen" parent="." instance=ExtResource("7_vs")]

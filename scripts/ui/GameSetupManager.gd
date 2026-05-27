@@ -115,3 +115,4 @@ func _apply_faction_preset(preset: String, factions: Array[int]) -> void:
 			TerrainDefs.Faction.PLAYER,
 			TerrainDefs.Faction.ENEMY_B,
 			GameState.Relation.ALLIED)
+	# "three_way" and "free_for_all" — all-hostile, already set by _init_default_relations

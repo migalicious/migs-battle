@@ -229,6 +229,17 @@ func _handle(raw: String) -> void:
 			GameState.player_gold = sg_amount
 			GameState.gold_changed.emit(0, sg_amount)
 			_send({"ok": true, "gold": GameState.player_gold})
+		"get_relations":
+			var rel_out := {}
+			for key in GameState.faction_relations:
+				rel_out[str(key)] = int(GameState.faction_relations[key])
+			_send({"relations": rel_out, "active_factions": Array(GameState.active_factions)})
+		"trigger_diplomacy":
+			var td_from: int = int(d.get("from_faction", 1))
+			var td_to: int = int(d.get("to_faction", 0))
+			var td_relation: int = int(d.get("relation", GameState.Relation.HOSTILE))
+			GameState.set_relation(td_from, td_to, td_relation)
+			_send({"ok": true, "from": td_from, "to": td_to, "relation": td_relation})
 		"item_defs":
 			var id_list: Array = []
 			for id_item in ItemRegistry.get_all_items():
@@ -363,6 +374,8 @@ func _handle(raw: String) -> void:
 					if sc_unit:
 						sc_unit.unit_name = str(entry["unit_name"])
 						sc_unit.faction = TerrainDefs.Faction.PLAYER
+						if GameState.persistent_roster.is_empty():
+							sc_unit.is_leader = true  # first unit (Roland) is the squad leader
 						GameState.persistent_roster.append(sc_unit)
 				GameState.player_gold = int(sc_campaign.starting_gold)
 			if sc_idx < sc_campaign.scenarios.size():

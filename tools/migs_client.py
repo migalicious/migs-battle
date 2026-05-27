@@ -213,6 +213,41 @@ def capture_town(town_id: str, faction: int = 0) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Campaign
+# ---------------------------------------------------------------------------
+
+def start_campaign(scenario_idx: int = 0, permadeath: bool = False) -> dict:
+    """Start (or restart) a campaign run at the given scenario index."""
+    return send(
+        {"action": "start_campaign", "scenario_idx": scenario_idx, "permadeath": permadeath},
+        delay=1.5,
+    )
+
+def get_campaign_state() -> dict:
+    """Return campaign run state: active flag, scenario idx, permadeath, roster list."""
+    return send({"action": "get_campaign_state"})
+
+def advance_scenario() -> dict:
+    """Collect survivors, increment scenario index, and prepare the next map params."""
+    return send({"action": "advance_scenario"})
+
+
+# ---------------------------------------------------------------------------
+# Diplomacy
+# ---------------------------------------------------------------------------
+
+def get_relations() -> dict:
+    """Returns faction_relations dict and active_factions list."""
+    return send({"action": "get_relations"})
+
+
+def trigger_diplomacy(from_faction: int, to_faction: int, relation: int) -> dict:
+    """Force a relation change. relation: 0=HOSTILE, 1=NEUTRAL_REL, 2=ALLIED."""
+    return send({"action": "trigger_diplomacy",
+                 "from_faction": from_faction, "to_faction": to_faction, "relation": relation})
+
+
+# ---------------------------------------------------------------------------
 # Battle
 # ---------------------------------------------------------------------------
 
