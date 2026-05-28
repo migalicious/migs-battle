@@ -3,13 +3,14 @@
 test_campaign_sim.py — Campaign completability simulation for migs-battle.
 
 Simulates a full 6-scenario "The Black March" campaign by:
-  1. Starting scenario 0 with the default roster (Roland L4, Sylvia L3, Merlin L3,
-     Aldric L2, Bors L2, Isolde L2).
+  1. Starting scenario 0 with the default 3-unit roster (Roland L4, Sylvia L3, Merlin L3).
   2. Running BATTLES_PER_SCENARIO force_battles per scenario.
-  3. After each won battle, giving earned XP to all alive roster units.
-  4. Calling start_campaign(idx) for each subsequent scenario, which reuses the
-     leveled persistent_roster (roster reset only happens at idx=0).
-  5. Tabulating win rates, level curves, and XP efficiency for all 6 scenarios.
+  3. Applying actual HP damage after each battle (persistent across battles).
+  4. After each won battle, giving earned XP to alive units and partially healing them
+     (simulating a garrison rest).
+  5. Between scenarios: full-heal + revive dead units (between-map recovery), then
+     start_campaign(idx+1) which auto-delivers the previous scenario's reward units.
+  6. Tabulating win rates, level curves, roster growth, and XP efficiency.
 
 Pass criteria per scenario  (no scenario may have 0 wins — that is a hard wall):
   S0 Border Skirmish:  win rate >= 60 %
@@ -35,13 +36,14 @@ from tools.migs_client import *
 BATTLES_PER_SCENARIO = int(sys.argv[sys.argv.index("--battles") + 1]) if "--battles" in sys.argv else 5
 
 SCENARIOS = [
-    # (idx, name,                  win_threshold, win_conditions)
-    (0, "Border Skirmish",         0.60, "hq_capture"),
-    (1, "River Crossing",          0.50, "hq_capture + all_strongholds"),
-    (2, "Uneasy Allies",           0.45, "hq_capture"),
-    (3, "Three Kingdoms",          0.40, "all_strongholds"),
-    (4, "The Shadow Rises",        0.35, "hq_capture"),
-    (5, "The Final March",         0.30, "all_strongholds"),
+    # (idx, name,                  win_threshold, win_conditions,              expected_roster_size)
+    # expected_roster_size = units at the START of this scenario (including rewards from prior)
+    (0, "Border Skirmish",         0.60, "hq_capture",                        3),
+    (1, "River Crossing",          0.50, "hq_capture + all_strongholds",      4),  # +Aldric
+    (2, "Uneasy Allies",           0.45, "hq_capture",                        5),  # +Bors
+    (3, "Three Kingdoms",          0.40, "all_strongholds",                   6),  # +Isolde
+    (4, "The Shadow Rises",        0.35, "hq_capture",                        8),  # +Leif +Caius
+    (5, "The Final March",         0.30, "all_strongholds",                  10),  # +Petra +Nessa
 ]
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -87,6 +89,22 @@ def _avg_level(units: list) -> float:
 # start_campaign / get_campaign_state / advance_scenario are exported from migs_client
 
 
+# ── Popup handling ────────────────────────────────────────────────────────────
+
+def _dismiss_popup_if_present() -> None:
+    """Dismiss any active diplomacy popup by pressing 'Refuse'.
+    Scenarios 2 and 4 can immediately show an alliance-offer popup that pauses
+    the scene tree; DebugServer is PROCESS_MODE_ALWAYS so it still responds, but
+    the popup must be cleared before force_battle works correctly."""
+    try:
+        r = press_button("Refuse")
+    except Exception:
+        r = {"error": "no response"}
+    if "error" not in r:
+        info("Dismissed diplomacy popup (chose Refuse)")
+        time.sleep(0.3)
+
+
 # ── Section 0 — Starting roster analysis ──────────────────────────────────────
 
 def check_starting_roster() -> None:
@@ -113,13 +131,13 @@ def check_starting_roster() -> None:
 
     cs = get_campaign_state()
     check("campaign_run_active is true", cs.get("campaign_run_active") is True)
-    check("Roster has 6 starting units",
-          cs.get("roster_size", 0) == 6, f"size={cs.get('roster_size')}")
+    check("Roster has 3 starting units",
+          cs.get("roster_size", 0) == 3, f"size={cs.get('roster_size')}")
 
 
 # ── Section 1-6 — Simulate each scenario ──────────────────────────────────────
 
-def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str) -> dict:
+def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str, expected_roster: int = 0) -> dict:
     header(f"Scenario {s_idx}: {s_name}  [need ≥ {win_thresh:.0%} wins | {win_cond}]")
 
     # ── Snapshot roster before battles ──
@@ -142,6 +160,12 @@ def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str)
         info("No enemy squads found on this map")
 
     check(f"S{s_idx}: player squad deployed", len(units_before) > 0, f"{len(units_before)} units")
+    if expected_roster > 0:
+        cs_now = get_campaign_state()
+        actual_roster = cs_now.get("roster_size", 0)
+        check(f"S{s_idx}: roster size = {expected_roster}",
+              actual_roster == expected_roster,
+              f"actual={actual_roster}")
     check(f"S{s_idx}: enemy present",         len(enemy_list) > 0,   f"{len(enemy_list)} squads")
 
     level_delta = roster_avg_before - enemy_avg
@@ -173,6 +197,9 @@ def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str)
         def_wiped   = result.get("defender_wiped", False)
         total_xp    = result.get("attacker_xp", 0)
 
+        # Make battle damage persistent so later battles see worn-down units.
+        apply_battle_damage(atk_units_result)
+
         if not atk_wiped:
             wins += 1
             # Per-unit XP = (XP_WIN_BASE + int(enemy_avg_level * XP_WIN_PER_LEVEL))
@@ -180,17 +207,20 @@ def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str)
             alive_count  = max(len(alive_after), 1)
             per_unit_xp  = total_xp // alive_count
 
-            # Apply to all alive roster units
+            # Give XP to alive units, then simulate a garrison rest (partial heal).
             all_roster = get_units()
             for u in all_roster:
                 if u.get("alive"):
                     give_xp(u["name"], per_unit_xp)
+            heal_roster(fraction=0.75)
 
             total_xp_per_unit += per_unit_xp
             outcome = f"{GREEN}WIN {RESET}"
         else:
             losses += 1
             per_unit_xp = 0
+            # Survivors limp on; dead units remain dead.
+            heal_roster(fraction=0.25)
             outcome = f"{RED}LOSS{RESET}"
 
         info(
@@ -240,17 +270,18 @@ def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str)
         ))
 
     return {
-        "scenario_idx":    s_idx,
-        "scenario_name":   s_name,
-        "wins":            wins,
-        "losses":          losses,
-        "errors":          errors,
-        "win_rate":        win_rate,
-        "win_threshold":   win_thresh,
+        "scenario_idx":     s_idx,
+        "scenario_name":    s_name,
+        "wins":             wins,
+        "losses":           losses,
+        "errors":           errors,
+        "win_rate":         win_rate,
+        "win_threshold":    win_thresh,
         "avg_level_before": roster_avg_before,
         "avg_level_after":  roster_avg_after,
-        "enemy_avg_level": enemy_avg,
-        "avg_xp_per_win":  avg_xp_per_win,
+        "enemy_avg_level":  enemy_avg,
+        "avg_xp_per_win":   avg_xp_per_win,
+        "roster_size":      len(units_before),
     }
 
 
@@ -259,15 +290,16 @@ def simulate_scenario(s_idx: int, s_name: str, win_thresh: float, win_cond: str)
 def print_campaign_report(results: list) -> None:
     header("CAMPAIGN COMPLETABILITY REPORT")
 
-    col = f"  {'Scenario':<22} {'Lvl▶':>6} {'▶Lvl':>6} {'EnemyLvl':>9} {'WinRate':>8} {'WinReq':>7} {'XP/Win':>7}"
+    col = f"  {'Scenario':<22} {'Units':>5} {'Lvl▶':>6} {'▶Lvl':>6} {'EnemyLvl':>9} {'WinRate':>8} {'WinReq':>7} {'XP/Win':>7}"
     print(col)
-    print("  " + "-" * 68)
+    print("  " + "-" * 74)
 
     for r in results:
         met   = r["win_rate"] >= r["win_threshold"]
         color = GREEN if met else RED
         print(
             f"  {r['scenario_name']:<22} "
+            f"{r.get('roster_size', 0):>5} "
             f"{r['avg_level_before']:>6.2f} "
             f"{r['avg_level_after']:>6.2f} "
             f"{r['enemy_avg_level']:>9.2f} "
@@ -340,18 +372,25 @@ if __name__ == "__main__":
     check_starting_roster()
 
     results = []
-    for s_idx, s_name, s_thresh, s_cond in SCENARIOS:
+    for s_idx, s_name, s_thresh, s_cond, s_expected_roster in SCENARIOS:
         if s_idx > 0:
+            # Between scenarios: full heal + revive dead units (simulate between-map recovery).
+            heal_roster(fraction=1.0, revive=True)
             # Reload the next scenario map while reusing the leveled persistent_roster.
-            # start_campaign(idx >= 1) skips the roster-reset block, so GDScript carries
-            # the leveled UnitData objects (same references) into the new squad.
+            # start_campaign(idx >= 1) preserves the roster AND auto-delivers the previous
+            # scenario's reward units (Aldric, Bors, Isolde, etc.) into persistent_roster.
             r_sc = start_campaign(scenario_idx=s_idx, permadeath=False)
             if not r_sc.get("ok"):
                 print(f"ERROR: start_campaign({s_idx}) failed: {r_sc}")
                 break
-            time.sleep(0.3)
+            time.sleep(1.0)  # extra headroom for larger maps (32×48) to finish generating
 
-        r = simulate_scenario(s_idx, s_name, s_thresh, s_cond)
+        # Dismiss any diplomacy popup that may have appeared on map load
+        # (scenarios 2 and 4 can immediately trigger alliance-offer popups that
+        # pause the tree; "Refuse" is the safe default for simulation purposes)
+        _dismiss_popup_if_present()
+
+        r = simulate_scenario(s_idx, s_name, s_thresh, s_cond, s_expected_roster)
         results.append(r)
 
     if len(results) == len(SCENARIOS):

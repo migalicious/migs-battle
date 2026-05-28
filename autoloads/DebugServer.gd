@@ -8,6 +8,7 @@ var _client: StreamPeerTCP = null
 var _buf: String = ""
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS  # stay active even when tree is paused (e.g. alliance popup)
 	if not OS.is_debug_build():
 		return
 	_server = TCPServer.new()
@@ -354,19 +355,23 @@ func _handle(raw: String) -> void:
 							break
 				_send({"ok": true, "town_id": ct_id, "faction": ct_faction})
 		"start_campaign":
-			# Set up a campaign run at the given scenario index and go to Main
+			# Set up a campaign run at the given scenario index and go to Main.
+			# sc_idx == 0: full reset + fresh default roster.
+			# sc_idx  > 0: preserve leveled persistent_roster from previous scenario.
 			var sc_idx: int = int(d.get("scenario_idx", 0))
 			var permadeath: bool = bool(d.get("permadeath", false))
-			GameState.reset()
+			const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
+			if sc_idx == 0:
+				GameState.reset()
 			GameState.campaign_run_active = true
 			GameState.difficulty_permadeath = permadeath
-			const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
-			var _sc_cd := _CampaignDef.new()
-			_sc_cd.build_default()
-			GameState.campaign_def = _sc_cd
+			if GameState.campaign_def == null:
+				var _sc_cd := _CampaignDef.new()
+				_sc_cd.build_default()
+				GameState.campaign_def = _sc_cd
 			GameState.current_scenario_idx = sc_idx
-			# Build starting roster for scenario 0, or stub minimal roster for later
 			var sc_campaign = GameState.campaign_def
+			# Scenario 0: build the canonical starting roster
 			if sc_idx == 0:
 				GameState.persistent_roster = []
 				for entry in sc_campaign.starting_units:
@@ -375,9 +380,10 @@ func _handle(raw: String) -> void:
 						sc_unit.unit_name = str(entry["unit_name"])
 						sc_unit.faction = TerrainDefs.Faction.PLAYER
 						if GameState.persistent_roster.is_empty():
-							sc_unit.is_leader = true  # first unit (Roland) is the squad leader
+							sc_unit.is_leader = true  # Roland is the squad leader
 						GameState.persistent_roster.append(sc_unit)
 				GameState.player_gold = int(sc_campaign.starting_gold)
+			# Apply map params for the chosen scenario
 			if sc_idx < sc_campaign.scenarios.size():
 				var sc_def = sc_campaign.scenarios[sc_idx]
 				var sc_params := MapParams.new()
@@ -396,7 +402,19 @@ func _handle(raw: String) -> void:
 				GameState.active_conditions = []
 				for wc in sc_def.win_conditions:
 					GameState.active_conditions.append(str(wc))
-			# Build a default squad from roster if no configured squads yet
+			# For sc_idx > 0, deliver the previous scenario's reward units into persistent_roster.
+			# This mirrors what VictoryScreen._deliver_scenario_rewards() does in real play.
+			if sc_idx > 0 and sc_idx - 1 < sc_campaign.scenarios.size():
+				var prev_sdef = sc_campaign.scenarios[sc_idx - 1]
+				for sc_reward in prev_sdef.reward_units:
+					var sc_re := sc_reward as Dictionary
+					var sc_ru := UnitRegistry.create_unit(str(sc_re.get("class_id", "")), int(sc_re.get("level", 1)))
+					if sc_ru:
+						sc_ru.unit_name = str(sc_re.get("unit_name", "Unknown"))
+						sc_ru.faction = TerrainDefs.Faction.PLAYER
+						sc_ru.is_leader = false
+						GameState.persistent_roster.append(sc_ru)
+			# Build player squad from roster (carries leveled units for sc_idx > 0)
 			if GameState.persistent_roster.size() > 0:
 				var sc_squad := SquadData.new()
 				sc_squad.squad_id = "player_squad_0"
@@ -406,6 +424,16 @@ func _handle(raw: String) -> void:
 					sc_uu.faction = TerrainDefs.Faction.PLAYER
 					sc_squad.units.append(sc_uu)
 				GameState.configured_squads = [sc_squad]
+			# Clear stale scene-node references so register_squad() starts clean.
+			# (GameState.reset() handles this for sc_idx == 0; we do it manually here.)
+			if sc_idx > 0:
+				GameState.player_squads = []
+				GameState.enemy_squads = []
+				GameState.reserve_squads = []
+				GameState.faction_squads = {}
+				GameState.town_ownership = {}
+				GameState.current_phase = GameState.Phase.OVERWORLD
+			get_tree().paused = false  # clear any stale pause from a previous popup
 			get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
 			_send({"ok": true, "scenario_idx": sc_idx})
 		"get_campaign_state":
@@ -441,6 +469,42 @@ func _handle(raw: String) -> void:
 				else:
 					GameSetupManager.prepare_campaign_scenario(GameState.current_scenario_idx)
 					_send({"ok": true, "new_scenario_idx": GameState.current_scenario_idx})
+		"apply_battle_damage":
+			# Apply HP/alive states from a force_battle attacker_units result to the real roster.
+			var ab_states: Array = d.get("units", [])
+			for ab_state in ab_states:
+				var ab_st := ab_state as Dictionary
+				var ab_unit := _find_unit(str(ab_st.get("name", "")))
+				if not ab_unit:
+					continue
+				if not bool(ab_st.get("alive", true)):
+					ab_unit.hp = 0
+					ab_unit.is_alive = false
+				else:
+					var ab_ratio := float(ab_st.get("hp", ab_unit.hp)) / float(maxi(int(ab_st.get("max_hp", ab_unit.max_hp)), 1))
+					ab_unit.hp = maxi(1, int(float(ab_unit.max_hp) * ab_ratio))
+					ab_unit.is_wounded = float(ab_unit.hp) / float(maxi(ab_unit.max_hp, 1)) < 0.25
+			_send({"ok": true})
+		"heal_roster":
+			# Raise all alive roster units to at least (fraction * max_hp).
+			# If revive=true, also revive dead units at the given fraction (min 0.25 max_hp).
+			var hr_frac: float = float(d.get("fraction", 1.0))
+			var hr_revive: bool = bool(d.get("revive", false))
+			for sq in GameState.player_squads:
+				if not (sq is Squad):
+					continue
+				for unit in (sq as Squad).squad_data.units:
+					var u := unit as UnitData
+					if not u.is_alive:
+						if hr_revive:
+							u.is_alive = true
+							u.hp = maxi(1, int(float(u.max_hp) * maxf(hr_frac, 0.25)))
+							u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
+						continue
+					var hr_target := int(float(u.max_hp) * hr_frac)
+					u.hp = mini(u.max_hp, maxi(u.hp, hr_target))
+					u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
+			_send({"ok": true})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 

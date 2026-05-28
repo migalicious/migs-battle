@@ -14,3 +14,4 @@ extends Resource
 @export var win_conditions: Array[String] = ["hq_capture"]
 @export var special_objectives: Array[String] = []
 @export var starting_gold: int = 100
+@export var reward_units: Array = []  # Array of {class_id, unit_name, level}

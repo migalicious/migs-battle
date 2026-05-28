@@ -259,6 +259,20 @@ def force_battle() -> dict:
     """
     return send({"action": "force_battle"}, delay=0.8)
 
+def apply_battle_damage(attacker_units: list) -> dict:
+    """
+    Apply HP/alive states from a force_battle attacker_units list to the real roster.
+    Call this after force_battle() to make damage persistent between sim battles.
+    """
+    return send({"action": "apply_battle_damage", "units": attacker_units})
+
+def heal_roster(fraction: float = 1.0, revive: bool = False) -> dict:
+    """
+    Raise all alive roster units to at least (fraction * max_hp).
+    If revive=True, dead units are brought back at max(fraction, 0.25) * max_hp.
+    """
+    return send({"action": "heal_roster", "fraction": fraction, "revive": revive})
+
 
 # ---------------------------------------------------------------------------
 # Pretty-printers

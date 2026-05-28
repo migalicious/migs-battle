@@ -125,9 +125,21 @@ func _update_label() -> void:
 	var leader := squad_data.get_leader()
 	_label.text = leader.unit_name if leader else "???"
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if is_garrisoned and squad_data:
+		_heal_garrison(delta)
 	if _is_moving and _path_line:
 		_update_path_line()
+
+func _heal_garrison(delta: float) -> void:
+	for unit in squad_data.units:
+		var u := unit as UnitData
+		if not u.is_alive or u.hp >= u.max_hp:
+			continue
+		var heal := int(float(u.max_hp) * GameBalance.GARRISON_HEAL_RATE * delta)
+		if heal > 0:
+			u.hp = mini(u.max_hp, u.hp + heal)
+			u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
 
 func _physics_process(_delta: float) -> void:
 	if is_garrisoned:

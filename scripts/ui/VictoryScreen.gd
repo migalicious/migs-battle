@@ -86,6 +86,7 @@ func _on_faction_won(winning_faction: int) -> void:
 
 		if GameState.campaign_run_active:
 			GameState.collect_survivors()
+			_deliver_scenario_rewards()
 			GameState.campaign_retry = false
 			_play_btn.visible = false
 			_campaign_btn.visible = true
@@ -146,6 +147,23 @@ func _on_campaign_btn_pressed() -> void:
 	# Prepare the next (or same, if retrying) scenario and go to transition screen
 	GameSetupManager.prepare_campaign_scenario(GameState.current_scenario_idx)
 	get_tree().change_scene_to_file("res://scenes/ui/CampaignTransitionScreen.tscn")
+
+func _deliver_scenario_rewards() -> void:
+	var cdef = GameState.campaign_def
+	if not cdef:
+		return
+	var sidx := GameState.current_scenario_idx
+	if sidx >= cdef.scenarios.size():
+		return
+	var sdef = cdef.scenarios[sidx]
+	for entry in sdef.reward_units:
+		var e := entry as Dictionary
+		var unit := UnitRegistry.create_unit(str(e.get("class_id", "")), int(e.get("level", 1)))
+		if unit:
+			unit.unit_name = str(e.get("unit_name", "Unknown"))
+			unit.faction = TerrainDefs.Faction.PLAYER
+			unit.is_leader = false
+			GameState.persistent_roster.append(unit)
 
 func _has_leader_survivors() -> bool:
 	for u in GameState.persistent_roster:
