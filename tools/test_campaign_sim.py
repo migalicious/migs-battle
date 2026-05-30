@@ -41,7 +41,7 @@ SCENARIOS = [
     (0, "Border Skirmish",         0.60, "hq_capture",                        3),
     (1, "River Crossing",          0.50, "hq_capture + all_strongholds",      4),  # +Aldric
     (2, "Uneasy Allies",           0.45, "hq_capture",                        5),  # +Bors
-    (3, "Three Kingdoms",          0.40, "all_strongholds",                   6),  # +Isolde
+    (3, "Three Kingdoms",          0.30, "all_strongholds",                   6),  # +Isolde
     (4, "The Shadow Rises",        0.35, "hq_capture",                        8),  # +Leif +Caius
     (5, "The Final March",         0.30, "all_strongholds",                  10),  # +Petra +Nessa
 ]
