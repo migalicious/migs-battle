@@ -15,3 +15,4 @@ extends Resource
 @export var special_objectives: Array[String] = []
 @export var starting_gold: int = 100
 @export var reward_units: Array = []  # Array of {class_id, unit_name, level}
+@export var enemy_difficulty_mult: float = 1.0

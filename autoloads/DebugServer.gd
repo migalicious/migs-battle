@@ -184,10 +184,16 @@ func _handle(raw: String) -> void:
 		"force_battle":
 			var atk_sq: Squad = null
 			var def_sq: Squad = null
+			var fb_enemy_idx: int = int(d.get("enemy_squad_idx", 0))
 			for sq in GameState.player_squads:
 				if sq is Squad: atk_sq = sq; break
+			var fb_enemy_count: int = 0
 			for sq in GameState.enemy_squads:
-				if sq is Squad: def_sq = sq; break
+				if sq is Squad:
+					if fb_enemy_count == fb_enemy_idx:
+						def_sq = sq
+						break
+					fb_enemy_count += 1
 			if not atk_sq or not def_sq:
 				_send({"error": "need at least one player and one enemy squad"})
 			else:
@@ -398,6 +404,7 @@ func _handle(raw: String) -> void:
 				sc_params.active_factions = sc_factions
 				GameState.pending_map_params = sc_params
 				GameState.active_factions = sc_factions
+				GameState.enemy_difficulty_mult = float(sc_def.enemy_difficulty_mult)
 				GameState._init_default_relations()
 				GameState.active_conditions = []
 				for wc in sc_def.win_conditions:
@@ -488,8 +495,10 @@ func _handle(raw: String) -> void:
 		"heal_roster":
 			# Raise all alive roster units to at least (fraction * max_hp).
 			# If revive=true, also revive dead units at the given fraction (min 0.25 max_hp).
+			# If add=true, add (fraction * max_hp) to current HP instead of using a floor.
 			var hr_frac: float = float(d.get("fraction", 1.0))
 			var hr_revive: bool = bool(d.get("revive", false))
+			var hr_add: bool = bool(d.get("add", false))
 			for sq in GameState.player_squads:
 				if not (sq is Squad):
 					continue
@@ -501,8 +510,12 @@ func _handle(raw: String) -> void:
 							u.hp = maxi(1, int(float(u.max_hp) * maxf(hr_frac, 0.25)))
 							u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
 						continue
-					var hr_target := int(float(u.max_hp) * hr_frac)
-					u.hp = mini(u.max_hp, maxi(u.hp, hr_target))
+					if hr_add:
+						var hr_amount := int(float(u.max_hp) * hr_frac)
+						u.hp = mini(u.max_hp, u.hp + hr_amount)
+					else:
+						var hr_target := int(float(u.max_hp) * hr_frac)
+						u.hp = mini(u.max_hp, maxi(u.hp, hr_target))
 					u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
 			_send({"ok": true})
 		_:

@@ -36,6 +36,7 @@ var difficulty_permadeath: bool = false
 var campaign_def = null      # CampaignDef instance (untyped)
 var campaign_retry: bool = false  # true when retrying same scenario after defeat
 var pre_scenario_levels: Dictionary = {}  # unit_name -> level before the last scenario
+var enemy_difficulty_mult: float = 1.0
 
 var is_loading_save: bool = false
 var save_squad_data: Dictionary = {}
@@ -214,6 +215,7 @@ func reset() -> void:
 	campaign_def = null
 	campaign_retry = false
 	pre_scenario_levels = {}
+	enemy_difficulty_mult = 1.0
 	_init_default_relations()
 
 # ── Campaign Unit Persistence ─────────────────────────────────────────────────

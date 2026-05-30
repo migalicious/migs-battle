@@ -1,12 +1,12 @@
 extends Node
 
-const ROUNDS: int = 3
+const ROUNDS: int = 4
 const BASE_HIT_CHANCE: float = 0.80
 const HIT_CHANCE_PER_AGI: float = 0.02
 const DEFENSE_REDUCTION: float = 0.5
 const DAMAGE_VARIANCE: float = 0.10
-const XP_WIN_BASE: int = 30
-const XP_WIN_PER_LEVEL: float = 3.0
+const XP_WIN_BASE: int = 45
+const XP_WIN_PER_LEVEL: float = 4.0
 const XP_LOSE_BASE: int = 5
 const XP_LOSE_PER_LEVEL: float = 1.0
 const XP_THRESHOLD_BASE: int = 100

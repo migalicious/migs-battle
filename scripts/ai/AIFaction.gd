@@ -17,6 +17,7 @@ func _ready() -> void:
 func _setup() -> void:
 	_map_manager = get_parent().get_node("MapManager") as MapManager
 	_squad_controller = get_parent().get_node("Squads") as SquadController
+	difficulty_mult = GameState.enemy_difficulty_mult
 	if _map_manager and _squad_controller:
 		_initial_spawn()
 
@@ -158,12 +159,26 @@ func _find_patrol_target(_squad: Squad) -> TownNode:
 
 # ── Squad Templates ───────────────────────────────────────────────────────────
 
+func _allowed_templates() -> Array[int]:
+	if difficulty_mult <= 0.80:
+		return [1, 3]         # B(4u) + D(3u) — early
+	elif difficulty_mult < 0.95:
+		return [0, 1, 3]      # + A(5u) — mid-early
+	elif difficulty_mult < 1.10:
+		return [4, 1, 2, 3]   # E(brutes) replaces A; C(paladin) enters — mid-late
+	else:
+		return [5, 1, 4, 2]   # F(cavalry) + E(brutes) as primary; B + C as support — late
+
 func _build_template(template_idx: int) -> SquadData:
-	match template_idx % 4:
+	var allowed := _allowed_templates()
+	var t := allowed[template_idx % allowed.size()]
+	match t:
 		0: return _template_a()
 		1: return _template_b()
 		2: return _template_c()
-		_: return _template_d()
+		3: return _template_d()
+		4: return _template_e()
+		_: return _template_f()
 
 func _template_a() -> SquadData:
 	var d := SquadData.new()
@@ -200,6 +215,26 @@ func _template_d() -> SquadData:
 	_add(d, "cavalry", "Scout Captain", 0, 0, true,  4)
 	_add(d, "cavalry", "Rider",         0, 1, false, 4)
 	_add(d, "archer",  "Marksman",      1, 0, false, 3)
+	return d
+
+func _template_e() -> SquadData:
+	var d := SquadData.new()
+	d.faction = controlled_faction
+	_add(d, "warrior", "War Chief",   0, 0, true,  7)
+	_add(d, "warrior", "Enforcer",    0, 1, false, 6)
+	_add(d, "fighter", "Brute",       0, 2, false, 5)
+	_add(d, "archer",  "Sniper",      1, 0, false, 5)
+	_add(d, "mage",    "Battle Mage", 1, 1, false, 5)
+	return d
+
+func _template_f() -> SquadData:
+	var d := SquadData.new()
+	d.faction = controlled_faction
+	_add(d, "cavalry", "Lance Lord",   0, 0, true,  8)
+	_add(d, "cavalry", "Outrider",     0, 1, false, 7)
+	_add(d, "cavalry", "Charger",      0, 2, false, 6)
+	_add(d, "archer",  "Horse Bow",    1, 0, false, 6)
+	_add(d, "mage",    "Vanguard Hex", 1, 1, false, 5)
 	return d
 
 func _add(data: SquadData, class_id: String, uname: String, row: int, col: int, is_leader: bool, level: int) -> void:

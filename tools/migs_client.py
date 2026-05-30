@@ -251,13 +251,14 @@ def trigger_diplomacy(from_faction: int, to_faction: int, relation: int) -> dict
 # Battle
 # ---------------------------------------------------------------------------
 
-def force_battle() -> dict:
+def force_battle(enemy_squad_idx: int = 0) -> dict:
     """
-    Run BattleResolver.resolve() between the first player and enemy squads.
+    Run BattleResolver.resolve() between the first player squad and the
+    enemy squad at enemy_squad_idx (default 0).
     Returns: attacker_wiped, defender_wiped, attacker_xp, defender_xp,
              attacker_units[], defender_units[], log[].
     """
-    return send({"action": "force_battle"}, delay=0.8)
+    return send({"action": "force_battle", "enemy_squad_idx": enemy_squad_idx}, delay=0.8)
 
 def apply_battle_damage(attacker_units: list) -> dict:
     """
@@ -266,12 +267,14 @@ def apply_battle_damage(attacker_units: list) -> dict:
     """
     return send({"action": "apply_battle_damage", "units": attacker_units})
 
-def heal_roster(fraction: float = 1.0, revive: bool = False) -> dict:
+def heal_roster(fraction: float = 1.0, revive: bool = False, add_mode: bool = False) -> dict:
     """
-    Raise all alive roster units to at least (fraction * max_hp).
+    If add_mode=False (default): raise all alive roster units to at least (fraction * max_hp).
+    If add_mode=True: add (fraction * max_hp) to each unit's current HP, capped at max_hp.
     If revive=True, dead units are brought back at max(fraction, 0.25) * max_hp.
     """
-    return send({"action": "heal_roster", "fraction": fraction, "revive": revive})
+    return send({"action": "heal_roster", "fraction": fraction,
+                 "revive": revive, "add": add_mode})
 
 
 # ---------------------------------------------------------------------------
