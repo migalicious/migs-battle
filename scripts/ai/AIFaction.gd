@@ -202,7 +202,7 @@ func _template_b() -> SquadData:
 func _template_c() -> SquadData:
 	var d := SquadData.new()
 	d.faction = controlled_faction
-	_add(d, "paladin", "Paladin Lord",  0, 0, true,  8)
+	_add(d, "paladin", "Paladin Lord",  0, 0, true,  6)
 	_add(d, "knight",  "Heavy Knight",  0, 1, false, 6)
 	_add(d, "knight",  "Iron Guard",    0, 2, false, 6)
 	_add(d, "archer",  "Veteran Bow",   1, 0, false, 6)
