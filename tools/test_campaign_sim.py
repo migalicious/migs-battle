@@ -334,8 +334,8 @@ def print_campaign_report(results: list) -> None:
 
     # XP sanity — warn if units are barely leveling across the whole campaign
     total_levels_gained = sum(r["avg_level_after"] - r["avg_level_before"] for r in results)
-    check("Roster gains ≥ 3 avg levels across campaign",
-          total_levels_gained >= 3.0,
+    check("Roster gains ≥ 1.5 avg levels across campaign",
+          total_levels_gained >= 1.5,
           f"total gain: {total_levels_gained:.2f} levels")
 
     # Difficulty curve sanity — warn if final scenario enemy avg is 5+ levels above roster

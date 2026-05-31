@@ -46,7 +46,7 @@ func build_default() -> void:
 		_make(5, "The Final March",
 			"The last stand. Your army against the world.",
 			303030, 48, 48, 10, 4, [0, 1, 2, 3], "free_for_all", ["all_strongholds"],
-			[], 1.35),
+			[], 1.10),
 	]
 
 func _make(idx: int, sname: String, desc: String,
