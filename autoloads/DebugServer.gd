@@ -209,6 +209,11 @@ func _handle(raw: String) -> void:
 					var ba := act as BattleAction
 					log_entries.append({"type": ba.action_type, "actor": ba.actor_unit_id, "target": ba.target_unit_id, "attack": ba.attack_name, "dmg": ba.damage_dealt})
 				_send({"ok": true, "attacker_wiped": result.attacker_wiped, "defender_wiped": result.defender_wiped, "attacker_xp": result.attacker_xp, "defender_xp": result.defender_xp, "attacker_units": atk_states, "defender_units": def_states, "log": log_entries})
+		"item_defs":
+			var id_list: Array = []
+			for item in ItemRegistry.get_all_items():
+				id_list.append(_item_dict(item))
+			_send({"items": id_list})
 		"inventory":
 			var inv_list: Array = []
 			for inv_id in GameState.player_inventory:
@@ -644,6 +649,7 @@ func _atk_dict(atk) -> Dictionary:
 		"hits": a.hits, "power": a.power_multiplier,
 		"row": int(a.targets_row), "all_row": a.hits_all_in_row,
 		"all_col": a.hits_all_in_column, "cond": a.condition_id,
+		"is_heal": a.is_heal,
 	}
 
 func _class_dict(cls: ClassDefinition) -> Dictionary:
