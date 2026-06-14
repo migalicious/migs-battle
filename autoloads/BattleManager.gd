@@ -36,8 +36,13 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 		var _dg := _mm.world_to_grid(sq_b.global_position)
 		atk_on_water = _mm.get_terrain(_ag.x, _ag.y) == _WATER
 		def_on_water = _mm.get_terrain(_dg.x, _dg.y) == _WATER
-	_heal_wounded_before_battle(sq_a.squad_data)
-	_heal_wounded_before_battle(sq_b.squad_data)
+	# Heal wounded units to full before a fresh encounter — but NOT for a besieged
+	# garrison. A defender under repeated assault must accumulate damage, otherwise
+	# an attacker that can't wipe it in one 4-round battle could never take the town.
+	if not sq_a.is_garrisoned:
+		_heal_wounded_before_battle(sq_a.squad_data)
+	if not sq_b.is_garrisoned:
+		_heal_wounded_before_battle(sq_b.squad_data)
 	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data, atk_on_water, def_on_water)
 	_precompute_level_ups(_current_result)
 	battle_started.emit(sq_a.squad_data, sq_b.squad_data)

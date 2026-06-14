@@ -61,11 +61,18 @@ func _make(idx: int, sname: String, desc: String,
 	s.map_height = h
 	s.num_towns = towns
 	s.num_castles = castles
+	# Assign fresh arrays — ScenarioDef has non-empty defaults ([0,1] / ["hq_capture"]),
+	# so appending here would DUPLICATE them (doubling factions -> duplicate HQ nodes,
+	# and doubling/leaking win conditions onto every scenario).
+	var fac: Array[int] = []
 	for f in factions:
-		s.active_factions.append(int(f))
+		fac.append(int(f))
+	s.active_factions = fac
 	s.faction_preset = preset
+	var wc_arr: Array[String] = []
 	for wc in wins:
-		s.win_conditions.append(str(wc))
+		wc_arr.append(str(wc))
+	s.win_conditions = wc_arr
 	s.reward_units = rewards
 	s.enemy_difficulty_mult = enemy_diff
 	return s

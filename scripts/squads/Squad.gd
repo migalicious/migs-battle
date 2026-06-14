@@ -26,6 +26,8 @@ var garrison_town: TownNode = null
 var _is_selected: bool = false
 var _is_moving: bool = false
 var _destination: Vector3 = Vector3.ZERO
+var _stuck_time: float = 0.0
+var _last_progress_pos: Vector3 = Vector3.ZERO
 var _is_flying: bool = false
 var _is_aquatic: bool = false
 var _path_line: MeshInstance3D = null
@@ -132,6 +134,8 @@ func _process(delta: float) -> void:
 		_update_path_line()
 
 func _heal_garrison(delta: float) -> void:
+	if _garrison_contested():
+		return  # no free healing while a hostile squad is besieging the town
 	for unit in squad_data.units:
 		var u := unit as UnitData
 		if not u.is_alive or u.hp >= u.max_hp:
@@ -141,7 +145,19 @@ func _heal_garrison(delta: float) -> void:
 			u.hp = mini(u.max_hp, u.hp + heal)
 			u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
 
-func _physics_process(_delta: float) -> void:
+func _garrison_contested() -> bool:
+	if not is_instance_valid(garrison_town):
+		return false
+	for f in GameState.active_factions:
+		if not GameState.are_hostile(faction, f):
+			continue
+		for sq in GameState.get_squads_by_faction(f):
+			if is_instance_valid(sq) and not sq.in_battle \
+					and sq.global_position.distance_to(garrison_town.global_position) < 2.5:
+				return true
+	return false
+
+func _physics_process(delta: float) -> void:
 	if is_garrisoned:
 		velocity = Vector3.ZERO
 		return
@@ -180,6 +196,19 @@ func _physics_process(_delta: float) -> void:
 	move_and_slide()
 	_update_terrain_speed()
 
+	# Stuck detection: if blocked from progressing toward the destination (e.g. a
+	# defender's body sits on the target town), stop so squad_arrived fires and the
+	# arrival logic engages/captures. Without this the squad spins in place forever
+	# and never triggers a battle at a garrisoned town.
+	if global_position.distance_to(_last_progress_pos) > 0.06:
+		_last_progress_pos = global_position
+		_stuck_time = 0.0
+	else:
+		_stuck_time += delta
+		if _stuck_time > 0.5:
+			_stuck_time = 0.0
+			_stop_moving()
+
 func _stop_moving() -> void:
 	_is_moving = false
 	velocity = Vector3.ZERO
@@ -205,6 +234,8 @@ func _update_path_line() -> void:
 func set_destination(world_pos: Vector3) -> void:
 	_destination = Vector3(world_pos.x, global_position.y, world_pos.z)
 	_is_moving = true
+	_last_progress_pos = global_position
+	_stuck_time = 0.0
 	if not _is_flying and not _is_aquatic and _nav_agent:
 		_nav_agent.target_position = _destination
 
@@ -219,6 +250,12 @@ func deselect_squad() -> void:
 
 func is_selected() -> bool:
 	return _is_selected
+
+func is_moving() -> bool:
+	return _is_moving
+
+func get_destination() -> Vector3:
+	return _destination
 
 func garrison_at(town: TownNode) -> void:
 	is_garrisoned = true

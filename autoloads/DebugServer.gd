@@ -73,7 +73,9 @@ func _handle(raw: String) -> void:
 			_take_screenshot(str(d.get("path", "/tmp/migs_screenshot.png")))
 		"press_button":
 			var text := str(d.get("text", ""))
-			var btn := _find_button(get_tree().current_scene, text)
+			# Search from root, not current_scene: modal UI (battle result screen,
+			# popups) is added under the SceneTree root, a sibling of current_scene.
+			var btn := _find_button(get_tree().root, text)
 			if btn:
 				if btn.disabled:
 					_send({"error": "button is disabled: %s" % text})
@@ -103,7 +105,7 @@ func _handle(raw: String) -> void:
 			else:
 				_send({"error": "LineEdit not found: %s" % node_name})
 		"scene_tree":
-			_send({"tree": _dump_tree(get_tree().current_scene, 0)})
+			_send({"tree": _dump_tree(get_tree().root, 0)})
 		"state":
 			_send(_build_state())
 		"towns":
@@ -252,11 +254,6 @@ func _handle(raw: String) -> void:
 			var td_relation: int = int(d.get("relation", GameState.Relation.HOSTILE))
 			GameState.set_relation(td_from, td_to, td_relation)
 			_send({"ok": true, "from": td_from, "to": td_to, "relation": td_relation})
-		"item_defs":
-			var id_list: Array = []
-			for id_item in ItemRegistry.get_all_items():
-				id_list.append(_item_dict(id_item))
-			_send({"items": id_list})
 		"class_defs":
 			var cd_list: Array = []
 			for cd_id in UnitRegistry._classes:
@@ -523,6 +520,15 @@ func _handle(raw: String) -> void:
 						u.hp = mini(u.max_hp, maxi(u.hp, hr_target))
 					u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
 			_send({"ok": true})
+		"overworld":
+			_send(_build_overworld())
+		"move_squad":
+			_send(_move_squad(d))
+		"set_time_scale":
+			var ts_scale: float = clampf(float(d.get("scale", 1.0)), 0.1, 20.0)
+			var ts_prev: float = Engine.time_scale
+			Engine.time_scale = ts_scale
+			_send({"ok": true, "previous": ts_prev, "scale": ts_scale})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -703,3 +709,130 @@ func _squad_dict(sd: SquadData) -> Dictionary:
 func _send(data: Dictionary) -> void:
 	if _client and _client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		_client.put_data((JSON.stringify(data) + "\n").to_utf8_buffer())
+
+
+# ── Overworld automation (real-play bridge) ─────────────────────────────────────
+
+func _squad_id(sq: Squad) -> String:
+	return str(sq.get_instance_id())
+
+func _find_live_squad(id: String) -> Squad:
+	for sq in GameState.player_squads:
+		if sq is Squad and _squad_id(sq as Squad) == id:
+			return sq as Squad
+	for sq in GameState.enemy_squads:
+		if sq is Squad and _squad_id(sq as Squad) == id:
+			return sq as Squad
+	return null
+
+func _overworld_squad_dict(sq: Squad) -> Dictionary:
+	var sd := sq.squad_data
+	var alive := 0
+	var hp_cur := 0.0
+	var hp_max := 0.0
+	if sd:
+		for u in sd.units:
+			var ud := u as UnitData
+			if ud.is_alive:
+				alive += 1
+			hp_cur += float(ud.hp)
+			hp_max += float(ud.max_hp)
+	var dest := sq.get_destination()
+	var squad_id_str := ""
+	if sd:
+		squad_id_str = sd.squad_id
+	return {
+		"id": _squad_id(sq),
+		"squad_id": squad_id_str,
+		"name": str(sq.name),
+		"faction": int(sq.faction),
+		"x": sq.global_position.x, "z": sq.global_position.z,
+		"in_battle": sq.in_battle,
+		"is_moving": sq.is_moving(),
+		"is_garrisoned": sq.is_garrisoned,
+		"dest_x": dest.x, "dest_z": dest.z,
+		"alive_count": alive,
+		"hp_frac": (hp_cur / hp_max) if hp_max > 0.0 else 0.0,
+		"hostile_to_player": GameState.are_hostile(TerrainDefs.Faction.PLAYER, sq.faction),
+	}
+
+func _build_overworld() -> Dictionary:
+	var scene := get_tree().current_scene
+	var map_mgr: MapManager = null
+	if scene:
+		map_mgr = scene.get_node_or_null("MapManager") as MapManager
+	var squads: Array = []
+	for sq in GameState.player_squads:
+		if sq is Squad:
+			squads.append(_overworld_squad_dict(sq as Squad))
+	for sq in GameState.enemy_squads:
+		if sq is Squad:
+			squads.append(_overworld_squad_dict(sq as Squad))
+	var towns: Array = []
+	if map_mgr:
+		for t in map_mgr.get_towns():
+			var tn := t as TownNode
+			var cap_owner := -2
+			if is_instance_valid(tn.occupying_squad) and tn.occupying_squad.faction != tn.faction:
+				cap_owner = int(tn.occupying_squad.faction)
+			var capturable := tn.faction == TerrainDefs.Faction.NEUTRAL or GameState.are_hostile(TerrainDefs.Faction.PLAYER, tn.faction)
+			towns.append({
+				"id": tn.town_data.town_id, "faction": int(tn.faction),
+				"x": tn.global_position.x, "z": tn.global_position.z,
+				"type": int(tn.town_data.town_type),
+				"capture_ticks": tn.capture_ticks,
+				"capture_turns": tn.town_data.capture_turns,
+				"capture_owner": cap_owner,
+				"garrisoned": is_instance_valid(tn.garrisoned_squad),
+				"capturable_by_player": capturable,
+			})
+	var winner := -2
+	if GameState.current_phase == GameState.Phase.VICTORY:
+		winner = int(TerrainDefs.Faction.PLAYER)
+	elif GameState.current_phase == GameState.Phase.DEFEAT:
+		winner = -3
+	return {
+		"phase": int(GameState.current_phase),
+		"paused": get_tree().paused,
+		"squads": squads,
+		"towns": towns,
+		"active_conditions": GameState.active_conditions,
+		"town_ownership": GameState.town_ownership,
+		"winner": winner,
+	}
+
+func _move_squad(d: Dictionary) -> Dictionary:
+	var sq := _find_live_squad(str(d.get("id", "")))
+	if not sq:
+		return {"error": "squad not found: %s" % str(d.get("id", ""))}
+	var scene := get_tree().current_scene
+	var map_mgr: MapManager = null
+	if scene:
+		map_mgr = scene.get_node_or_null("MapManager") as MapManager
+	var dest := Vector3.ZERO
+	if d.has("town_id"):
+		if not map_mgr:
+			return {"error": "no MapManager"}
+		var found: TownNode = null
+		for t in map_mgr.get_towns():
+			if (t as TownNode).town_data.town_id == str(d.get("town_id", "")):
+				found = t as TownNode
+				break
+		if not found:
+			return {"error": "town not found: %s" % str(d.get("town_id", ""))}
+		dest = found.global_position
+	elif d.has("grid_x") and d.has("grid_y"):
+		if not map_mgr:
+			return {"error": "no MapManager"}
+		dest = map_mgr.grid_to_world(Vector2i(int(d.get("grid_x", 0)), int(d.get("grid_y", 0))))
+	elif d.has("x") and d.has("z"):
+		dest = Vector3(float(d.get("x", 0.0)), sq.global_position.y, float(d.get("z", 0.0)))
+	else:
+		return {"error": "move_squad needs town_id, grid_x/grid_y, or x/z"}
+	if sq.is_garrisoned:
+		var gt := sq.garrison_town
+		if gt:
+			gt.clear_garrison()
+		sq.ungarrison()
+	sq.set_destination(dest)
+	return {"ok": true, "id": _squad_id(sq), "dest_x": dest.x, "dest_z": dest.z}

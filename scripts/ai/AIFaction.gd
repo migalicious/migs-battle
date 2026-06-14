@@ -34,16 +34,42 @@ func _process(delta: float) -> void:
 func _initial_spawn() -> void:
 	var spawn_points := _map_manager.get_towns_by_faction(controlled_faction)
 	var count := mini(spawn_points.size(), GameBalance.AI_MAX_SQUADS)
-	for i in range(count):
-		var town: TownNode = spawn_points[i]
-		var data := _build_template(i)
-		data.squad_id = "ai_%d_%d" % [controlled_faction, i]
-		_equip_template_items(data, i)
+	var hq := _map_manager.get_hq(controlled_faction)
+
+	# Always station a defender garrison on the HQ so capturing it forces a
+	# battle (an undefended HQ could be walked in and taken with zero combat).
+	# The garrison counts toward AI_MAX_SQUADS, so total army size is unchanged.
+	var spawned := 0
+	if hq and count > 0:
+		var gdata := _template_hq_garrison()
+		gdata.squad_id = "ai_%d_hqdef" % controlled_faction
+		_equip_template_items(gdata, 0)
+		var gsq: Squad = _SQUAD_SCENE.instantiate() as Squad
+		_squad_controller.add_child(gsq)
+		gsq.global_position = Vector3(hq.global_position.x, 0.5, hq.global_position.z)
+		gsq.setup(gdata)
+		_squad_controller.wire_squad(gsq)
+		gsq.garrison_at(hq)
+		hq.set_garrison(gsq)
+		spawned = 1
+
+	# Remaining squads roam from the faction's other towns.
+	var ti := spawned
+	for town in spawn_points:
+		if spawned >= count:
+			break
+		if hq and town == hq:
+			continue  # HQ already garrisoned above
+		var data := _build_template(ti)
+		data.squad_id = "ai_%d_%d" % [controlled_faction, ti]
+		_equip_template_items(data, ti)
 		var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
 		_squad_controller.add_child(sq)
 		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
 		sq.setup(data)
 		_squad_controller.wire_squad(sq)
+		spawned += 1
+		ti += 1
 
 # ── Tick Loop ─────────────────────────────────────────────────────────────────
 
@@ -225,6 +251,17 @@ func _template_e() -> SquadData:
 	_add(d, "fighter", "Brute",       0, 2, false, 5)
 	_add(d, "archer",  "Sniper",      1, 0, false, 5)
 	_add(d, "mage",    "Battle Mage", 1, 1, false, 5)
+	return d
+
+func _template_hq_garrison() -> SquadData:
+	# HQ defender. Deliberately LIGHT: an HQ should require a fight to take, but
+	# stay winnable in a single decisive battle. A garrison heals between assaults
+	# (garrison healing + heal-before-battle), so a defender that can't be wiped in
+	# one engagement would soft-lock the map. Scales with difficulty via _add().
+	var d := SquadData.new()
+	d.faction = controlled_faction
+	_add(d, "knight", "HQ Guard",  0, 0, true,  4)
+	_add(d, "archer", "HQ Sentry", 1, 0, false, 3)
 	return d
 
 func _template_f() -> SquadData:

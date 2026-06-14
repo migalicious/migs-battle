@@ -123,9 +123,18 @@ func check_win_conditions() -> void:
 	if current_phase != Phase.OVERWORLD:
 		return
 	var winner := -1
+	var has_strongholds := active_conditions.has("all_strongholds")
 	if active_conditions.has("hq_capture"):
-		winner = _check_hq_capture()
-	if winner == -1 and active_conditions.has("all_strongholds"):
+		var hq_result := _check_hq_capture()
+		if hq_result == TerrainDefs.Faction.PLAYER:
+			# On maps that also require all_strongholds, taking the enemy HQ alone
+			# must NOT win — all_strongholds gates the victory. The player can still
+			# LOSE here (handled below) if their own HQ falls.
+			if not has_strongholds:
+				winner = hq_result
+		elif hq_result != -1:
+			winner = hq_result  # non-player result => player HQ was captured (a loss)
+	if winner == -1 and has_strongholds:
 		winner = _check_all_strongholds()
 	if winner != -1:
 		trigger_end(winner)

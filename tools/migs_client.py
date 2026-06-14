@@ -233,6 +233,54 @@ def advance_scenario() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Overworld automation (real-play bridge)
+# ---------------------------------------------------------------------------
+
+def overworld() -> dict:
+    """
+    Live snapshot of the running overworld for real-play automation.
+
+    Returns:
+      phase: int (0=OVERWORLD 1=IN_BATTLE 2=PAUSED 3=VICTORY 4=DEFEAT)
+      paused: bool
+      winner: int (-2 none, 0 player won, -3 player lost)
+      active_conditions: list[str]   town_ownership: dict[town_id -> faction]
+      squads: [{id, squad_id, name, faction, x, z, in_battle, is_moving,
+                is_garrisoned, dest_x, dest_z, alive_count, hp_frac,
+                hostile_to_player}]   (player + enemy)
+      towns:  [{id, faction, x, z, type, capture_ticks, capture_turns,
+                capture_owner, garrisoned, capturable_by_player}]
+    `id` is a stable opaque handle (instance id) — pass it to move_squad().
+    """
+    return send({"action": "overworld"}, delay=0.15)
+
+def move_squad(squad_id: str, town_id: str = None,
+               grid: tuple = None, pos: tuple = None) -> dict:
+    """
+    Issue a REAL move order to a live squad (routes through Squad.set_destination,
+    which drives navigation -> collisions -> battles -> captures -> win checks).
+
+    Provide exactly one target:
+      town_id="0_hq"           move toward a town
+      grid=(gx, gy)            move toward a grid cell
+      pos=(x, z)               move toward a world position
+    Ungarrisons the squad first if needed.
+    """
+    cmd = {"action": "move_squad", "id": str(squad_id)}
+    if town_id is not None:
+        cmd["town_id"] = town_id
+    elif grid is not None:
+        cmd["grid_x"], cmd["grid_y"] = int(grid[0]), int(grid[1])
+    elif pos is not None:
+        cmd["x"], cmd["z"] = float(pos[0]), float(pos[1])
+    return send(cmd, delay=0.15)
+
+def set_time_scale(scale: float) -> dict:
+    """Set Engine.time_scale (clamped 0.1-20) to fast-forward real-time play."""
+    return send({"action": "set_time_scale", "scale": scale}, delay=0.15)
+
+
+# ---------------------------------------------------------------------------
 # Diplomacy
 # ---------------------------------------------------------------------------
 
