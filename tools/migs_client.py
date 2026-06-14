@@ -216,12 +216,31 @@ def capture_town(town_id: str, faction: int = 0) -> dict:
 # Campaign
 # ---------------------------------------------------------------------------
 
-def start_campaign(scenario_idx: int = 0, permadeath: bool = False) -> dict:
-    """Start (or restart) a campaign run at the given scenario index."""
+def start_campaign(scenario_idx: int = 0, permadeath: bool = False,
+                   num_squads: int = 1) -> dict:
+    """
+    Start (or restart) a campaign run at the given scenario index.
+    num_squads > 1 splits the full persistent roster into that many squads
+    (one can-lead leader each, round-robin filler, <=6/squad); squad 0 spawns
+    active and the rest go to reserve (deploy them with deploy_squad()).
+    """
     return send(
-        {"action": "start_campaign", "scenario_idx": scenario_idx, "permadeath": permadeath},
+        {"action": "start_campaign", "scenario_idx": scenario_idx,
+         "permadeath": permadeath, "num_squads": num_squads},
         delay=1.5,
     )
+
+def deploy_squad(town_id: str = None, index="all", free: bool = False) -> dict:
+    """
+    Deploy reserve squad(s) onto the map at a town (default: player HQ).
+    index="all" deploys as many as gold allows (or all if free=True); an int
+    deploys that reserve index. Respects deploy-gold cost unless free=True.
+    Returns {deployed:[ids], gold, reserve_remaining}.
+    """
+    cmd = {"action": "deploy_squad", "index": index, "free": free}
+    if town_id is not None:
+        cmd["town_id"] = town_id
+    return send(cmd, delay=0.4)
 
 def get_campaign_state() -> dict:
     """Return campaign run state: active flag, scenario idx, permadeath, roster list."""

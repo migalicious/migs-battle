@@ -1,42 +1,39 @@
 #!/usr/bin/env python3
 """
-play_campaign.py — REAL-overworld campaign playtest for migs-battle.
+play_campaign.py — REAL-overworld, MULTI-SQUAD campaign winnability harness.
 
 Unlike tools/test_campaign_sim.py (which reimplements BattleResolver in Python and
-only simulates combat math), this script PLAYS THE LIVE GAME like a human:
+only simulates combat math — NOT a balance oracle), this script PLAYS THE LIVE GAME
+like a human and is the source of truth for "is the campaign winnable?":
 
-  * sets up each scenario with start_campaign() (lands in a real Main overworld),
-  * issues real move orders to live squads (move_squad -> Squad.set_destination),
-  * lets the engine drive navigation -> collisions -> BattleManager battles ->
-    town captures -> GameState.check_win_conditions(),
-  * observes the real outcome (VICTORY / DEFEAT) and advances.
+  * splits the roster into multiple squads (start_campaign num_squads),
+  * deploys reserve squads from the HQ under the real GOLD economy (or --free-deploy),
+  * drives each squad to a DISTINCT objective (one pushes the enemy HQ),
+  * RETREATS damaged squads to owned towns to garrison-heal, then sends them back,
+  * lets the engine run real navigation/collisions/battles/captures/win-conditions,
+  * resolves battle result screens (presses "Continue"),
+  * reports a per-scenario winnability verdict.
 
-So it exercises the actual gameplay loop end-to-end — the parts the local sim never
-touched. Tactics are deliberately simple ("greedy: grab the nearest objective"); the
-goal is coverage and finding stalls/soft-locks, not optimal play.
-
-Requires the game running with the project open (DebugServer on 127.0.0.1:6560).
-
-Launch options:
-  * Auto-launch (recommended): have Claude start the game with the godot-mcp
-    `run_project` tool and confirm "[DebugServer] Listening" via `get_debug_output`,
-    then run this script.
-  * Manual: open the project in the Godot editor and press Play, then run this script.
+Requires the game running with the project open (DebugServer on 127.0.0.1:6560) —
+auto-launch via godot-mcp run_project, or open the project and press Play.
 
 Run:
-    python3 tools/play_campaign.py [--runs N] [--speed S] [--permadeath] [--scenario K]
-        --runs N       attempts per scenario before giving up        (default 1)
-        --speed S      Engine.time_scale while playing               (default 6.0)
-        --permadeath   play on permadeath difficulty                 (default off)
-        --scenario K   only play scenario K (0-5) instead of all
+    python3 tools/play_campaign.py [options]
+        --squads N      split roster into up to N squads          (default 3)
+        --free-deploy   deploy all reserves for free (isolate combat from economy)
+        --speed S       Engine.time_scale while playing           (default 6.0)
+        --timeout T     wall-clock seconds per scenario           (default 240)
+        --scenario K    only play scenario K (0-5)
+        --runs N        attempts per scenario                     (default 1)
+        --permadeath    permadeath difficulty
 """
 
 import sys
 import time
 sys.path.insert(0, ".")
 from tools.migs_client import (
-    send, overworld, move_squad, set_time_scale,
-    start_campaign, get_campaign_state, heal_roster, press_button, get_relations,
+    send, overworld, move_squad, set_time_scale, deploy_squad,
+    start_campaign, get_campaign_state, heal_roster, press_button,
 )
 
 # ── Config ──────────────────────────────────────────────────────────────────────
@@ -48,23 +45,25 @@ RUNS        = _arg("--runs", 1, int)
 SPEED       = _arg("--speed", 6.0, float)
 PERMADEATH  = "--permadeath" in sys.argv
 ONLY_SCEN   = _arg("--scenario", -1, int)
+SQUADS      = _arg("--squads", 3, int)
+FREE_DEPLOY = "--free-deploy" in sys.argv
 
-# Phase enum (GameState.Phase)
 P_OVERWORLD, P_IN_BATTLE, P_PAUSED, P_VICTORY, P_DEFEAT = 0, 1, 2, 3, 4
 
-CAPTURE_HOLD_RADIUS = 2.5    # don't re-task a squad parked this close to a town it's taking
-POLL_DELAY          = 0.20   # wall-clock seconds between overworld snapshots
-SETUP_TIMEOUT       = 12.0   # wait this long for a scenario to land in OVERWORLD
-SCENARIO_TIMEOUT    = _arg("--timeout", 240.0, float)  # give up on a scenario after this much wall-clock
-STALL_TICKS         = 60     # consecutive unchanged polls => declared stall
+CAPTURE_HOLD_RADIUS = 2.5
+POLL_DELAY          = 0.20
+SETUP_TIMEOUT       = 12.0
+SCENARIO_TIMEOUT    = _arg("--timeout", 240.0, float)
+STALL_TICKS         = 80
+STUCK_LIMIT         = 12
+NUDGE_COOLDOWN      = 5
+HEAL_LOW            = 0.40   # retreat to heal below this hp fraction
+HEAL_HIGH           = 0.85   # rejoin the fight above this hp fraction
+DEPLOY_EVERY        = 25     # ticks between reserve-deploy attempts (economy permitting)
 
 SCENARIOS = [
-    (0, "Border Skirmish"),
-    (1, "River Crossing"),
-    (2, "Uneasy Allies"),
-    (3, "Three Kingdoms"),
-    (4, "The Shadow Rises"),
-    (5, "The Final March"),
+    (0, "Border Skirmish"), (1, "River Crossing"), (2, "Uneasy Allies"),
+    (3, "Three Kingdoms"), (4, "The Shadow Rises"), (5, "The Final March"),
 ]
 
 # ── Colours / logging ───────────────────────────────────────────────────────────
@@ -83,9 +82,9 @@ def info(msg):
     print(f"  [{INFO}] {msg}")
 
 def header(title):
-    print(f"\n{'='*66}\n  {title}\n{'='*66}")
+    print(f"\n{'='*72}\n  {title}\n{'='*72}")
 
-# ── Geometry / world-state helpers ──────────────────────────────────────────────
+# ── World-state helpers ──────────────────────────────────────────────────────────
 
 def _dist2(ax, az, bx, bz):
     dx, dz = ax - bx, az - bz
@@ -94,119 +93,129 @@ def _dist2(ax, az, bx, bz):
 def _player_squads(ow):
     return [s for s in ow.get("squads", []) if s["faction"] == 0]
 
-def _ownership_sig(ow):
-    """A hashable signature of map control + squad positions, for stall detection."""
-    own = tuple(sorted((k, v) for k, v in ow.get("town_ownership", {}).items()))
-    pos = tuple(sorted((s["id"], round(s["x"], 1), round(s["z"], 1))
-                       for s in _player_squads(ow)))
-    return (own, pos)
-
 def _capturable_towns(ow):
-    return [t for t in ow.get("towns", []) if t.get("capturable_by_player")
-            and t["faction"] != 0]
+    return [t for t in ow.get("towns", []) if t.get("capturable_by_player") and t["faction"] != 0]
+
+def _owned_towns(ow):
+    return [t for t in ow.get("towns", []) if t["faction"] == 0]
 
 def _hostile_enemy_squads(ow):
-    return [s for s in ow.get("squads", []) if s["faction"] != 0
-            and s.get("hostile_to_player")]
+    return [s for s in ow.get("squads", []) if s["faction"] != 0 and s.get("hostile_to_player")]
 
 def _nearest(items, x, z):
     return min(items, key=lambda i: _dist2(x, z, i["x"], i["z"])) if items else None
 
-# ── One greedy decision tick ────────────────────────────────────────────────────
+def _ownership_sig(ow):
+    own = tuple(sorted((k, v) for k, v in ow.get("town_ownership", {}).items()))
+    pos = tuple(sorted((s["id"], round(s["x"], 1), round(s["z"], 1)) for s in _player_squads(ow)))
+    return (own, pos)
 
-STUCK_LIMIT   = 12  # idle+unmoved ticks before a squad blacklists its target & reroutes
-NUDGE_COOLDOWN = 5  # ticks between re-trigger nudges on a parked-but-not-capturing squad
+# ── Multi-squad greedy driver: distinct objectives + retreat-to-heal ─────────────
 
 def _drive_tick(ow, mem):
-    """
-    Issue move orders to all idle player squads. `mem` holds per-squad routing
-    state {id: {last_pos, stuck, blacklist}} so we can route around targets a
-    squad can't reach (e.g. a town across impassable water).
-
-    Strategy: assault the enemy HQ first (that's the win for hq_capture and a
-    necessary stronghold for all_strongholds); fall back to other capturable
-    towns, then to chasing a hostile squad. Combat is gated on town assaults —
-    roaming enemies rarely collide — so we keep pushing onto enemy-held towns.
-    """
     towns   = _capturable_towns(ow)
     enemies = _hostile_enemy_squads(ow)
-    orders  = 0
+    owned   = _owned_towns(ow)
+    psquads = sorted(_player_squads(ow), key=lambda s: s["id"])
+    claimed = set()  # town ids already targeted this tick (objective de-dup)
 
-    for sq in _player_squads(ow):
+    # Pre-claim towns squads are actively capturing so others don't pile on.
+    for sq in psquads:
+        nt = _nearest(ow.get("towns", []), sq["x"], sq["z"])
+        if nt and _dist2(sq["x"], sq["z"], nt["x"], nt["z"]) <= CAPTURE_HOLD_RADIUS ** 2 \
+                and nt["faction"] != 0 and nt.get("capturable_by_player") \
+                and nt.get("capture_owner") == 0:
+            claimed.add(nt["id"])
+
+    for sq in psquads:
+        st = mem.setdefault(sq["id"], {"last_pos": None, "stuck": 0, "nudge": 0,
+                                       "recovering": False, "blacklist": set()})
+
+        # ── Retreat-to-heal state machine ──
+        if st["recovering"]:
+            if sq["hp_frac"] >= HEAL_HIGH:
+                st["recovering"] = False  # healed — fall through to objective logic
+            else:
+                if sq["in_battle"] or sq["is_moving"] or sq["is_garrisoned"]:
+                    continue  # en route, fighting, or garrisoned+healing → hold
+                dest = _nearest(owned, sq["x"], sq["z"])
+                if dest:
+                    move_squad(sq["id"], town_id=dest["id"])
+                continue
+        elif sq["hp_frac"] < HEAL_LOW and not sq["in_battle"] and owned:
+            st["recovering"] = True
+            if not sq["is_moving"]:
+                dest = _nearest(owned, sq["x"], sq["z"])
+                if dest:
+                    move_squad(sq["id"], town_id=dest["id"])
+            continue
+
         if sq["in_battle"] or sq["is_moving"]:
-            continue  # busy — let it finish
+            continue
 
-        st = mem.setdefault(sq["id"],
-                            {"last_pos": None, "stuck": 0, "nudge": 0, "blacklist": set()})
-
-        # Squad parked on a capturable town.
-        near_town = _nearest(ow.get("towns", []), sq["x"], sq["z"])
-        if near_town and _dist2(sq["x"], sq["z"], near_town["x"], near_town["z"]) \
-                <= CAPTURE_HOLD_RADIUS ** 2 \
-                and near_town["faction"] != 0 and near_town.get("capturable_by_player"):
+        # ── Parked on a capturable town: hold while capturing, else nudge ──
+        near = _nearest(ow.get("towns", []), sq["x"], sq["z"])
+        if near and _dist2(sq["x"], sq["z"], near["x"], near["z"]) <= CAPTURE_HOLD_RADIUS ** 2 \
+                and near["faction"] != 0 and near.get("capturable_by_player"):
             st["stuck"] = 0
-            if near_town.get("capture_owner") == 0:
-                # Capture already in progress — HOLD. Re-issuing a move would
-                # re-fire arrival -> begin_capture and reset the progress.
+            claimed.add(near["id"])
+            if near.get("capture_owner") == 0:
                 st["nudge"] = 0
                 continue
-            # Parked but NOT capturing (e.g. just won the garrison battle, or
-            # arrived just shy of the trigger). Re-trigger arrival on a cooldown
-            # so we don't thrash, which would also reset an in-progress capture.
             st["nudge"] += 1
             if st["nudge"] >= NUDGE_COOLDOWN:
                 st["nudge"] = 0
-                move_squad(sq["id"], town_id=near_town["id"])
-                orders += 1
+                move_squad(sq["id"], town_id=near["id"])
             continue
 
-        # Stuck detection: idle and position unchanged since last order.
+        # ── Stuck detection ──
         pos = (round(sq["x"], 1), round(sq["z"], 1))
         st["stuck"] = st["stuck"] + 1 if st["last_pos"] == pos else 0
         st["last_pos"] = pos
 
-        candidates = [t for t in towns if t["id"] not in st["blacklist"]]
-        if not candidates:                      # blacklisted everything — reset
-            st["blacklist"].clear()
-            candidates = towns
-
-        # Prefer enemy HQs (town type 2), else nearest capturable town.
-        hqs = [t for t in candidates if t.get("type") == 2]
-        pool = hqs if hqs else candidates
+        # ── Assign nearest UNCLAIMED objective (dedup), prefer enemy HQ ──
+        avail = [t for t in towns if t["id"] not in claimed and t["id"] not in st["blacklist"]]
+        if not avail:
+            avail = [t for t in towns if t["id"] not in st["blacklist"]] or towns
+        hqs = [t for t in avail if t.get("type") == 2]
+        pool = hqs if hqs else avail
         target = _nearest(pool, sq["x"], sq["z"])
-
-        # If we've been unable to reach the current target, blacklist + reroute.
         if target and st["stuck"] >= STUCK_LIMIT:
             st["blacklist"].add(target["id"])
             st["stuck"] = 0
-            rest = [t for t in candidates if t["id"] != target["id"]]
+            rest = [t for t in avail if t["id"] != target["id"]]
             target = _nearest(rest, sq["x"], sq["z"]) or target
-
         if target:
+            claimed.add(target["id"])
             move_squad(sq["id"], town_id=target["id"])
-            orders += 1
         elif enemies:
             e = _nearest(enemies, sq["x"], sq["z"])
             move_squad(sq["id"], pos=(e["x"], e["z"]))
-            orders += 1
-    return orders
 
 def _dismiss_popup():
-    """Best-effort dismissal of a diplomacy popup (chooses Refuse)."""
     try:
-        r = press_button("Refuse")
-        if "error" not in r:
+        if "error" not in press_button("Refuse"):
             info("Dismissed diplomacy popup (Refuse)")
-            return True
     except Exception:
         pass
-    return False
+
+def _do_deploy(stats):
+    """Deploy reserve squads from the HQ; track count + approx gold spent."""
+    r = deploy_squad(index="all", free=FREE_DEPLOY)
+    if isinstance(r, dict) and r.get("deployed"):
+        n = len(r["deployed"])
+        stats["deploys"] += n
+        new_gold = r.get("gold", stats["gold"])
+        stats["gold_spent"] += max(0, stats["gold"] - new_gold)
+        stats["gold"] = new_gold
+        info(f"Deployed {n} reserve squad(s)  (gold {new_gold}, reserve left "
+             f"{r.get('reserve_remaining')})")
+    elif isinstance(r, dict):
+        stats["gold"] = r.get("gold", stats["gold"])
 
 # ── Play one scenario attempt ────────────────────────────────────────────────────
 
-def play_attempt(s_idx, s_name):
-    """Play the live overworld until VICTORY / DEFEAT / stall / timeout."""
-    # Wait for the scenario to be set up and land in the overworld.
+def play_attempt(s_idx, s_name, start_gold):
     t0 = time.time()
     ow = {}
     while time.time() - t0 < SETUP_TIMEOUT:
@@ -215,169 +224,150 @@ def play_attempt(s_idx, s_name):
             break
         time.sleep(0.3)
     if not _player_squads(ow):
-        return {"outcome": "no_squads", "ticks": 0}
+        return {"outcome": "no_squads"}
 
     set_time_scale(SPEED)
+    stats = {"deploys": 0, "gold_spent": 0, "gold": start_gold}
+    _do_deploy(stats)  # field reserves up front
 
-    conds = ow.get("active_conditions", [])
-    info(f"Overworld up: {len(_player_squads(ow))} player squad(s), "
-         f"{len(ow.get('towns', []))} towns, win={conds}")
+    info(f"Overworld up: {len(_player_squads(ow))} active squad(s) after deploy, "
+         f"{len(ow.get('towns', []))} towns, win={ow.get('active_conditions')}")
 
-    last_sig, stall = None, 0
-    captures, battles_resolved = 0, 0
-    route_mem = {}
+    last_sig, stall, battles, captures, max_squads = None, 0, 0, 0, 0
+    mem = {}
     start = time.time()
+    tick = 0
 
     while time.time() - start < SCENARIO_TIMEOUT:
         ow = overworld()
         phase = ow.get("phase", P_OVERWORLD)
 
-        if phase == P_VICTORY:
-            return {"outcome": "victory", "winner": ow.get("winner"), "ticks": stall,
-                    "captures": captures, "battles": battles_resolved, "ow": ow}
-        if phase == P_DEFEAT:
-            return {"outcome": "defeat", "winner": ow.get("winner"), "ticks": stall,
-                    "captures": captures, "battles": battles_resolved, "ow": ow}
+        if phase in (P_VICTORY, P_DEFEAT):
+            return _result("victory" if phase == P_VICTORY else "defeat",
+                           ow, stall, captures, battles, stats, max_squads)
 
-        # A battle is playing — it ends on a "Continue" result screen that waits for
-        # a human click. Press it to return to the overworld (no-op until shown).
-        # A battle is always progress, so it never counts toward a stall.
         if phase == P_IN_BATTLE:
+            # Battles end on a "Continue" result screen (under the tree root) that
+            # waits for a click. Press it to resolve; a battle is always progress.
             r = press_button("Continue")
             if isinstance(r, dict) and "error" not in r:
-                battles_resolved += 1
+                battles += 1
             stall = 0
             time.sleep(POLL_DELAY)
             continue
 
-        # A paused overworld (not a battle) is almost always a diplomacy popup.
-        if ow.get("paused") and phase == P_OVERWORLD:
+        if ow.get("paused"):
             _dismiss_popup()
             time.sleep(POLL_DELAY)
             continue
 
-        if phase == P_OVERWORLD:
-            _drive_tick(ow, route_mem)
+        max_squads = max(max_squads, len(_player_squads(ow)))
+        _drive_tick(ow, mem)
 
-        # Stall detection on map control + squad positions.
+        tick += 1
+        if tick % DEPLOY_EVERY == 0:
+            _do_deploy(stats)  # income may now afford more squads
+
         sig = _ownership_sig(ow)
-        player_towns = sum(1 for v in ow.get("town_ownership", {}).values() if v == 0)
-        captures = max(captures, player_towns)
+        captures = max(captures, sum(1 for v in ow.get("town_ownership", {}).values() if v == 0))
         if sig == last_sig:
             stall += 1
         else:
-            stall = 0
-            last_sig = sig
+            stall, last_sig = 0, sig
         if stall >= STALL_TICKS:
-            return {"outcome": "stall", "ticks": stall, "captures": captures,
-                    "battles": battles_resolved, "ow": ow}
+            return _result("stall", ow, stall, captures, battles, stats, max_squads)
 
         time.sleep(POLL_DELAY)
 
-    return {"outcome": "timeout", "ticks": stall, "captures": captures,
-            "battles": battles_resolved, "ow": ow}
+    return _result("timeout", ow, stall, captures, battles, stats, max_squads)
 
-# ── Scenario driver (handles setup + retries) ────────────────────────────────────
+def _result(outcome, ow, stall, captures, battles, stats, max_squads):
+    alive = sum(s.get("alive_count", 0) for s in _player_squads(ow))
+    return {"outcome": outcome, "winner": ow.get("winner"), "ticks": stall,
+            "captures": captures, "battles": battles, "deploys": stats["deploys"],
+            "gold_spent": stats["gold_spent"], "squads": max_squads, "alive_end": alive}
+
+# ── Scenario driver ──────────────────────────────────────────────────────────────
 
 def play_scenario(s_idx, s_name, first):
     header(f"Scenario {s_idx}: {s_name}")
-
-    # Set up the scenario. idx 0 fully resets; idx>0 carries the leveled roster +
-    # delivers the previous scenario's reward units (mirrors real campaign advance).
     if not first:
-        heal_roster(fraction=1.0, revive=not PERMADEATH)  # between-map recovery
-    start_campaign(scenario_idx=s_idx, permadeath=PERMADEATH)
+        heal_roster(fraction=1.0, revive=not PERMADEATH)
+    start_campaign(scenario_idx=s_idx, permadeath=PERMADEATH, num_squads=SQUADS)
     time.sleep(1.0)
 
     cs = get_campaign_state()
-    info(f"Roster size at start: {cs.get('roster_size')}  "
-         f"gold={cs.get('player_gold')}  permadeath={cs.get('difficulty_permadeath')}")
+    roster = cs.get("roster_size")
+    start_gold = cs.get("player_gold", 0)
+    info(f"Roster {roster}  gold={start_gold}  squads={SQUADS}  "
+         f"deploy={'FREE' if FREE_DEPLOY else 'paid'}  permadeath={PERMADEATH}")
 
     result = {}
     for attempt in range(1, RUNS + 1):
         if attempt > 1:
-            info(f"Retry {attempt}/{RUNS} — re-setting up scenario")
+            info(f"Retry {attempt}/{RUNS}")
             heal_roster(fraction=1.0, revive=not PERMADEATH)
-            start_campaign(scenario_idx=s_idx, permadeath=PERMADEATH)
+            start_campaign(scenario_idx=s_idx, permadeath=PERMADEATH, num_squads=SQUADS)
             time.sleep(1.0)
-        result = play_attempt(s_idx, s_name)
+            cs = get_campaign_state()
+            start_gold = cs.get("player_gold", 0)
+        result = play_attempt(s_idx, s_name, start_gold)
         oc = result["outcome"]
-        tag = (GREEN if oc == "victory" else
-               YELLOW if oc in ("stall", "timeout") else RED)
-        info(f"Attempt {attempt}: {tag}{oc.upper()}{RESET}  "
-             f"player_towns={result.get('captures', 0)}  "
-             f"battles={result.get('battles', '?')}")
+        tag = GREEN if oc == "victory" else (YELLOW if oc in ("stall", "timeout") else RED)
+        info(f"Attempt {attempt}: {tag}{oc.upper()}{RESET}  squads={result.get('squads')}  "
+             f"deploys={result.get('deploys')}  battles={result.get('battles')}  "
+             f"p.towns={result.get('captures')}  alive={result.get('alive_end')}")
         if oc == "victory":
             break
 
     oc = result.get("outcome")
-    check(f"S{s_idx} ({s_name}): reached a real win/lose state",
-          oc in ("victory", "defeat"),
-          f"outcome={oc}")
-    check(f"S{s_idx} ({s_name}): cleared the scenario (real win conditions fired)",
-          oc == "victory",
-          f"winner={result.get('winner')}  player_towns={result.get('captures', 0)}")
-
-    if oc == "victory":
-        check(f"S{s_idx}: winner is PLAYER (0)", result.get("winner") == 0,
-              f"winner={result.get('winner')}")
-
-    return {
-        "idx": s_idx, "name": s_name,
-        "outcome": oc, "winner": result.get("winner"),
-        "captures": result.get("captures", 0),
-        "battles": result.get("battles", 0),
-        "roster_size": cs.get("roster_size"),
-        "passed": oc == "victory",
-    }
+    check(f"S{s_idx} ({s_name}): cleared (real win conditions fired)",
+          oc == "victory", f"outcome={oc} winner={result.get('winner')}")
+    return {"idx": s_idx, "name": s_name, "roster_size": roster, "passed": oc == "victory", **result}
 
 # ── Reporting ────────────────────────────────────────────────────────────────────
 
 def print_report(results):
-    header("REAL-PLAY CAMPAIGN REPORT")
-    print(f"  {'Scenario':<22} {'Roster':>6} {'Outcome':>9} {'P.Towns':>8} {'Battles':>8}")
-    print("  " + "-" * 60)
+    header("WINNABILITY REPORT  (real multi-squad play)")
+    hdr = f"  {'Scenario':<20}{'Roster':>7}{'Squads':>7}{'Deploys':>8}{'Battles':>8}{'P.Towns':>8}{'AliveEnd':>9}  {'Outcome':<9}"
+    print(hdr); print("  " + "-" * (len(hdr) - 2))
     for r in results:
-        oc = r["outcome"] or "?"
+        oc = r.get("outcome") or "?"
         color = GREEN if r["passed"] else (YELLOW if oc in ("stall", "timeout") else RED)
-        print(f"  {r['name']:<22} {str(r['roster_size']):>6} "
-              f"{color}{oc:>9}{RESET} {r['captures']:>8} {r['battles']:>8}")
+        print(f"  {r['name']:<20}{str(r.get('roster_size')):>7}{str(r.get('squads')):>7}"
+              f"{str(r.get('deploys')):>8}{str(r.get('battles')):>8}{str(r.get('captures')):>8}"
+              f"{str(r.get('alive_end')):>9}  {color}{oc:<9}{RESET}")
     print()
-    stalls  = [r for r in results if r["outcome"] in ("stall", "timeout")]
-    defeats = [r for r in results if r["outcome"] == "defeat"]
-    check("No soft-locks / stalls (greedy play kept making progress)",
-          not stalls, f"stalled: {[r['name'] for r in stalls]}" if stalls else "none")
-    check("No unexpected defeats", not defeats,
-          f"lost: {[r['name'] for r in defeats]}" if defeats else "none")
+    won = [r for r in results if r["passed"]]
+    info(f"Verdict: {len(won)}/{len(results)} scenarios winnable "
+         f"({'FREE-deploy' if FREE_DEPLOY else 'realistic economy'}, {SQUADS} squads)")
+    not_won = [r for r in results if not r["passed"]]
+    if not_won:
+        info("Not cleared: " + ", ".join(f"{r['name']}({r.get('outcome')})" for r in not_won))
 
 def print_summary():
-    header("OVERALL SUMMARY")
+    header("SUMMARY")
     passed = sum(1 for _, ok in _results if ok)
-    print(f"\n  {passed}/{len(_results)} checks passed\n")
-    fails = [n for n, ok in _results if not ok]
-    if fails:
-        print("  Failed checks:")
-        for n in fails:
+    print(f"\n  {passed}/{len(_results)} scenario checks passed\n")
+    for n, ok in _results:
+        if not ok:
             print(f"    {RED}✗{RESET} {n}")
-    return not fails
+    return passed == len(_results)
 
 # ── Entry point ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("migs-battle  ·  Real-Overworld Campaign Playtest")
-    print(f"speed={SPEED}x  runs/scenario={RUNS}  permadeath={PERMADEATH}")
+    print("migs-battle  ·  Multi-Squad Winnability Harness")
+    print(f"squads={SQUADS}  deploy={'FREE' if FREE_DEPLOY else 'paid'}  "
+          f"speed={SPEED}x  timeout={SCENARIO_TIMEOUT}s")
     print("Connecting to DebugServer on 127.0.0.1:6560 ...\n")
-
     try:
-        _ = send({"action": "state"})
+        send({"action": "state"})
     except Exception as e:
         print(f"ERROR: cannot reach DebugServer: {e}")
-        print("Start the game first (godot-mcp run_project, or open the project and Play).")
         sys.exit(1)
 
-    scen_list = ([(ONLY_SCEN, dict(SCENARIOS)[ONLY_SCEN])]
-                 if ONLY_SCEN >= 0 else SCENARIOS)
-
+    scen_list = ([(ONLY_SCEN, dict(SCENARIOS)[ONLY_SCEN])] if ONLY_SCEN >= 0 else SCENARIOS)
     results = []
     try:
         for i, (s_idx, s_name) in enumerate(scen_list):
@@ -387,7 +377,7 @@ if __name__ == "__main__":
                 info(f"Scenario {s_idx} not cleared — stopping campaign run.")
                 break
     finally:
-        set_time_scale(1.0)  # always restore real-time before exiting
+        set_time_scale(1.0)
 
     print_report(results)
     ok = print_summary()

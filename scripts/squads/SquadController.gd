@@ -197,12 +197,19 @@ func _show_cant_afford(pos: Vector3, cost: int) -> void:
 	tween.tween_callback(lbl.queue_free)
 
 func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
+	if not deploy_reserve(squad_data, town, false):
+		_show_cant_afford(town.global_position, _squad_deploy_cost(squad_data))
+
+# Deploy a reserve squad onto the map at a town. Charges deploy gold unless `free`.
+# Returns true on success, false if it couldn't afford it. Public so the DebugServer
+# (test harness) can field multiple squads through the same path the UI uses.
+func deploy_reserve(squad_data: SquadData, town: TownNode, free: bool = false) -> bool:
 	var cost := _squad_deploy_cost(squad_data)
-	if GameState.player_gold < cost:
-		_show_cant_afford(town.global_position, cost)
-		return
-	GameState.player_gold -= cost
-	GameState.gold_changed.emit(TerrainDefs.Faction.PLAYER, GameState.player_gold)
+	if not free:
+		if GameState.player_gold < cost:
+			return false
+		GameState.player_gold -= cost
+		GameState.gold_changed.emit(TerrainDefs.Faction.PLAYER, GameState.player_gold)
 
 	var idx: int = GameState.reserve_squads.find(squad_data)
 	if idx >= 0:
@@ -213,6 +220,7 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 	sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 1.5)
 	sq.setup(squad_data)
 	wire_squad(sq)
+	return true
 
 # ── Squad Merge ───────────────────────────────────────────────────────────────
 

@@ -368,6 +368,7 @@ func _handle(raw: String) -> void:
 			# sc_idx  > 0: preserve leveled persistent_roster from previous scenario.
 			var sc_idx: int = int(d.get("scenario_idx", 0))
 			var permadeath: bool = bool(d.get("permadeath", false))
+			var sc_num_squads: int = int(d.get("num_squads", 1))
 			const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
 			if sc_idx == 0:
 				GameState.reset()
@@ -423,16 +424,11 @@ func _handle(raw: String) -> void:
 						sc_ru.faction = TerrainDefs.Faction.PLAYER
 						sc_ru.is_leader = false
 						GameState.persistent_roster.append(sc_ru)
-			# Build player squad from roster (carries leveled units for sc_idx > 0)
+			# Build player squads from roster, split into up to num_squads squads.
 			if GameState.persistent_roster.size() > 0:
-				var sc_squad := SquadData.new()
-				sc_squad.squad_id = "player_squad_0"
-				sc_squad.faction = TerrainDefs.Faction.PLAYER
-				for sc_u in GameState.persistent_roster.slice(0, mini(6, GameState.persistent_roster.size())):
-					var sc_uu := sc_u as UnitData
-					sc_uu.faction = TerrainDefs.Faction.PLAYER
-					sc_squad.units.append(sc_uu)
-				GameState.configured_squads = [sc_squad]
+				for sc_u in GameState.persistent_roster:
+					(sc_u as UnitData).faction = TerrainDefs.Faction.PLAYER
+				GameState.configured_squads = _split_roster(GameState.persistent_roster, sc_num_squads)
 			# Clear stale scene-node references so register_squad() starts clean.
 			# (GameState.reset() handles this for sc_idx == 0; we do it manually here.)
 			if sc_idx > 0:
@@ -529,6 +525,8 @@ func _handle(raw: String) -> void:
 			var ts_prev: float = Engine.time_scale
 			Engine.time_scale = ts_scale
 			_send({"ok": true, "previous": ts_prev, "scale": ts_scale})
+		"deploy_squad":
+			_send(_deploy_squad(d))
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -836,3 +834,97 @@ func _move_squad(d: Dictionary) -> Dictionary:
 		sq.ungarrison()
 	sq.set_destination(dest)
 	return {"ok": true, "id": _squad_id(sq), "dest_x": dest.x, "dest_z": dest.z}
+
+
+# ── Multi-squad harness helpers ─────────────────────────────────────────────────
+
+func _split_roster(roster: Array, num_squads: int) -> Array[SquadData]:
+	# Cap so each squad keeps ~2+ units (a player wouldn't field 1-unit squads).
+	var n := clampi(num_squads, 1, maxi(1, int(roster.size() / 2.0)))
+	var squads: Array[SquadData] = []
+	for i in range(n):
+		var sd := SquadData.new()
+		sd.squad_id = "player_squad_%d" % i
+		sd.faction = TerrainDefs.Faction.PLAYER
+		squads.append(sd)
+	var leaders: Array = []
+	var others: Array = []
+	for u in roster:
+		var ud := u as UnitData
+		ud.is_leader = false
+		var cls := UnitRegistry.get_class_def(ud.class_id) as ClassDefinition
+		if cls and cls.can_lead:
+			leaders.append(ud)
+		else:
+			others.append(ud)
+	for sq in squads:
+		if leaders.is_empty():
+			break
+		var ldr := leaders.pop_front() as UnitData
+		ldr.is_leader = true
+		(sq as SquadData).units.append(ldr)
+	var pool: Array = leaders + others
+	var idx := 0
+	for u in pool:
+		var placed := false
+		for _t in range(squads.size()):
+			var sq := squads[idx % squads.size()] as SquadData
+			idx += 1
+			if sq.units.size() < 6:
+				sq.units.append(u)
+				placed = true
+				break
+		if not placed:
+			break
+	var result: Array[SquadData] = []
+	for sq in squads:
+		var s := sq as SquadData
+		if s.units.is_empty():
+			continue
+		var has_leader := false
+		for u in s.units:
+			if (u as UnitData).is_leader:
+				has_leader = true
+				break
+		if not has_leader:
+			(s.units[0] as UnitData).is_leader = true
+		result.append(s)
+	return result
+
+func _deploy_squad(d: Dictionary) -> Dictionary:
+	var scene := get_tree().current_scene
+	if not scene:
+		return {"error": "no scene"}
+	var ctrl := scene.get_node_or_null("Squads") as SquadController
+	var map_mgr := scene.get_node_or_null("MapManager") as MapManager
+	if not ctrl or not map_mgr:
+		return {"error": "not in Main scene"}
+	var town: TownNode = null
+	if d.has("town_id"):
+		for t in map_mgr.get_towns():
+			if (t as TownNode).town_data.town_id == str(d.get("town_id", "")):
+				town = t as TownNode
+				break
+		if not town:
+			return {"error": "town not found: %s" % str(d.get("town_id", ""))}
+	else:
+		town = map_mgr.get_hq(TerrainDefs.Faction.PLAYER)
+		if not town:
+			return {"error": "no player HQ"}
+	var free := bool(d.get("free", false))
+	var which = d.get("index", "all")
+	var deployed: Array = []
+	var reserves: Array = GameState.reserve_squads.duplicate()
+	if str(which) == "all":
+		for sd in reserves:
+			if ctrl.deploy_reserve(sd as SquadData, town, free):
+				deployed.append((sd as SquadData).squad_id)
+			else:
+				break
+	else:
+		var i := int(which)
+		if i >= 0 and i < reserves.size():
+			if ctrl.deploy_reserve(reserves[i] as SquadData, town, free):
+				deployed.append((reserves[i] as SquadData).squad_id)
+	return {"ok": true, "deployed": deployed, "gold": GameState.player_gold,
+		"reserve_remaining": GameState.reserve_squads.size()}

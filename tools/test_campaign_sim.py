@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
-test_campaign_sim.py — Campaign completability simulation for migs-battle.
+test_campaign_sim.py — MATH-ONLY combat sanity check.  NOT a balance/winnability oracle.
+
+  ⚠️  This reimplements BattleResolver in Python and runs combat math in isolation. It
+      does NOT play the real game (no real squads, movement, deploy economy, garrisons,
+      healing, or win-condition logic), so its "pass rates" must NOT be used to tune
+      difficulty or judge whether the campaign is winnable. Past balance cycles done
+      against this file were tuning a fake model.
+
+  ✅  Use  tools/play_campaign.py  (real multi-squad live-game play) as the winnability
+      oracle. Keep this only as a fast parallel sanity check on the combat formulas.
 
 Simulates a full 6-scenario "The Black March" campaign by:
   1. Starting scenario 0 with the default 3-unit roster.
@@ -598,7 +607,9 @@ def print_summary() -> bool:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("migs-battle  ·  Campaign Completability Simulation")
+    print(f"{RED}⚠  MATH-ONLY combat sim — NOT a balance/winnability oracle.{RESET}")
+    print(f"{RED}   Use tools/play_campaign.py (real multi-squad play) to judge winnability.{RESET}")
+    print("migs-battle  ·  Campaign Combat-Math Sanity Check")
     print(f"6 scenarios  ·  {RUN_ATTEMPTS} full-map run attempts per scenario  "
           f"(parallel Python sim)")
     print("Connecting to DebugServer on 127.0.0.1:6560 ...\n")
