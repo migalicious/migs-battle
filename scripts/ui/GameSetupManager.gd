@@ -19,6 +19,12 @@ func _on_config_ready(params: MapParams, win_conditions: Array[String], active_f
 	GameState._init_default_relations()
 	GameState.pending_map_params = params
 	get_tree().change_scene_to_file("res://scenes/ui/ArmyBuilderScreen.tscn")
+	# Random-map flow: ArmyBuilder emits army_ready (it only self-transitions for
+	# campaigns). Connect it here so "Start Battle" actually loads Main.
+	await get_tree().process_frame
+	var builder := get_tree().current_scene
+	if builder and builder.has_signal("army_ready"):
+		builder.army_ready.connect(_on_army_ready, CONNECT_ONE_SHOT)
 
 func _on_army_ready(squads: Array[SquadData]) -> void:
 	GameState.configured_squads = squads

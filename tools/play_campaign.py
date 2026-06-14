@@ -55,7 +55,7 @@ P_OVERWORLD, P_IN_BATTLE, P_PAUSED, P_VICTORY, P_DEFEAT = 0, 1, 2, 3, 4
 CAPTURE_HOLD_RADIUS = 2.5    # don't re-task a squad parked this close to a town it's taking
 POLL_DELAY          = 0.20   # wall-clock seconds between overworld snapshots
 SETUP_TIMEOUT       = 12.0   # wait this long for a scenario to land in OVERWORLD
-SCENARIO_TIMEOUT    = 240.0  # give up on a scenario after this much wall-clock
+SCENARIO_TIMEOUT    = _arg("--timeout", 240.0, float)  # give up on a scenario after this much wall-clock
 STALL_TICKS         = 60     # consecutive unchanged polls => declared stall
 
 SCENARIOS = [

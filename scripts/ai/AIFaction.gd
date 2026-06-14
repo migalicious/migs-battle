@@ -32,44 +32,71 @@ func _process(delta: float) -> void:
 # ── Spawning ──────────────────────────────────────────────────────────────────
 
 func _initial_spawn() -> void:
-	var spawn_points := _map_manager.get_towns_by_faction(controlled_faction)
-	var count := mini(spawn_points.size(), GameBalance.AI_MAX_SQUADS)
 	var hq := _map_manager.get_hq(controlled_faction)
+	if not hq:
+		return
+	var ti := 0
 
-	# Always station a defender garrison on the HQ so capturing it forces a
-	# battle (an undefended HQ could be walked in and taken with zero combat).
-	# The garrison counts toward AI_MAX_SQUADS, so total army size is unchanged.
-	var spawned := 0
-	if hq and count > 0:
-		var gdata := _template_hq_garrison()
-		gdata.squad_id = "ai_%d_hqdef" % controlled_faction
-		_equip_template_items(gdata, 0)
-		var gsq: Squad = _SQUAD_SCENE.instantiate() as Squad
-		_squad_controller.add_child(gsq)
-		gsq.global_position = Vector3(hq.global_position.x, 0.5, hq.global_position.z)
-		gsq.setup(gdata)
-		_squad_controller.wire_squad(gsq)
-		gsq.garrison_at(hq)
-		hq.set_garrison(gsq)
-		spawned = 1
+	# 1. Garrison the HQ so capturing it forces a battle (an undefended HQ could be
+	#    walked in and taken with zero combat).
+	_spawn_garrison(hq, "ai_%d_hqdef" % controlled_faction)
 
-	# Remaining squads roam from the faction's other towns.
-	var ti := spawned
-	for town in spawn_points:
-		if spawned >= count:
-			break
-		if hq and town == hq:
-			continue  # HQ already garrisoned above
+	# 2. Claim + garrison the nearest neutral cities (castles preferred, else towns)
+	#    so the faction actually HOLDS defended cities, not just an HQ. The NEUTRAL
+	#    guard stops adjacent factions double-claiming. Owned cities also yield
+	#    income -> earlier reinforcements.
+	for city in _nearest_neutral_cities(hq, GameBalance.AI_GARRISON_CASTLES):
+		city.set_faction(controlled_faction)
+		_spawn_garrison(city, "ai_%d_gar_%d" % [controlled_faction, ti])
+		ti += 1
+
+	# 3. Roaming patrols (additive to garrisons), spawned around the HQ so they
+	#    spread out and the player runs into them mid-map. (The faction owns only
+	#    its HQ + claimed castles at spawn, so roamers can't come from owned towns.)
+	for r in range(GameBalance.AI_MAX_ROAMERS):
 		var data := _build_template(ti)
 		data.squad_id = "ai_%d_%d" % [controlled_faction, ti]
 		_equip_template_items(data, ti)
 		var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
 		_squad_controller.add_child(sq)
-		sq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z + 2.0)
+		var ang := TAU * float(r) / float(maxi(1, GameBalance.AI_MAX_ROAMERS))
+		sq.global_position = Vector3(
+			hq.global_position.x + cos(ang) * 2.5, 0.5, hq.global_position.z + sin(ang) * 2.5)
 		sq.setup(data)
 		_squad_controller.wire_squad(sq)
-		spawned += 1
 		ti += 1
+
+func _spawn_garrison(town: TownNode, squad_id: String) -> void:
+	var gdata := _template_hq_garrison()
+	gdata.squad_id = squad_id
+	_equip_template_items(gdata, 0)
+	var gsq: Squad = _SQUAD_SCENE.instantiate() as Squad
+	_squad_controller.add_child(gsq)
+	gsq.global_position = Vector3(town.global_position.x, 0.5, town.global_position.z)
+	gsq.setup(gdata)
+	_squad_controller.wire_squad(gsq)
+	gsq.garrison_at(town)
+	town.set_garrison(gsq)
+
+func _nearest_neutral_cities(hq: TownNode, n: int) -> Array:
+	# Nearest claimable neutral settlements to the HQ. Castles (strategic cities)
+	# are preferred; falls back to towns since current maps spawn few/no castles.
+	var pool: Array = []
+	for town in _map_manager.get_towns():
+		var tn := town as TownNode
+		if tn == hq or tn.faction != TerrainDefs.Faction.NEUTRAL:
+			continue
+		if tn.town_data.town_type == TerrainDefs.TownType.HQ:
+			continue
+		pool.append(tn)
+	pool.sort_custom(func(a, b):
+		var ca := 1 if a.town_data.town_type == TerrainDefs.TownType.CASTLE else 0
+		var cb := 1 if b.town_data.town_type == TerrainDefs.TownType.CASTLE else 0
+		if ca != cb:
+			return ca > cb  # castles first
+		return hq.global_position.distance_to(a.global_position) \
+			< hq.global_position.distance_to(b.global_position))
+	return pool.slice(0, maxi(0, n))
 
 # ── Tick Loop ─────────────────────────────────────────────────────────────────
 
