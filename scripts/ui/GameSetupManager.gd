@@ -99,6 +99,9 @@ func _apply_scenario(scenario) -> void:
 	params.height      = int(scenario.map_height)
 	params.num_towns   = int(scenario.num_towns)
 	params.num_castles = int(scenario.num_castles)
+	params.castles_per_faction = int(scenario.castles_per_faction)
+	params.town_liberation_gold = int(scenario.town_liberation_gold)
+	params.town_liberation_unit = scenario.town_liberation_unit
 
 	var factions: Array[int] = []
 	for f in scenario.active_factions:

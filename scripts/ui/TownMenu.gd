@@ -92,29 +92,37 @@ func _build_friendly_body(reserve: Array) -> void:
 
 	_body_vbox.add_child(HSeparator.new())
 
-	var reserve_hdr := Label.new()
-	reserve_hdr.text = "Reserve Squads:"
-	reserve_hdr.add_theme_font_size_override("font_size", 11)
-	_body_vbox.add_child(reserve_hdr)
-
-	if reserve.is_empty():
-		var no_lbl := Label.new()
-		no_lbl.text = "(No reserve squads)"
-		no_lbl.add_theme_font_size_override("font_size", 10)
-		_body_vbox.add_child(no_lbl)
+	var is_stronghold: bool = _current_town.town_data and _current_town.town_data.is_stronghold()
+	if not is_stronghold:
+		# Plain towns cannot deploy — only strongholds (HQ/castle) are deploy points.
+		var note := Label.new()
+		note.text = "Deploy reserves from a stronghold (HQ or castle)."
+		note.add_theme_font_size_override("font_size", 10)
+		_body_vbox.add_child(note)
 	else:
-		for rd in reserve:
-			var squad_data := rd as SquadData
-			if not squad_data:
-				continue
-			var leader := squad_data.get_leader()
-			var alive_count := squad_data.get_alive_units().size()
-			var cost := _squad_deploy_cost(squad_data)
-			var btn := Button.new()
-			btn.text = "Deploy: %s  (%d units)  %dg" % [
-				leader.unit_name if leader else "???", alive_count, cost]
-			btn.pressed.connect(_on_deploy_pressed.bind(squad_data))
-			_body_vbox.add_child(btn)
+		var reserve_hdr := Label.new()
+		reserve_hdr.text = "Reserve Squads:"
+		reserve_hdr.add_theme_font_size_override("font_size", 11)
+		_body_vbox.add_child(reserve_hdr)
+
+		if reserve.is_empty():
+			var no_lbl := Label.new()
+			no_lbl.text = "(No reserve squads)"
+			no_lbl.add_theme_font_size_override("font_size", 10)
+			_body_vbox.add_child(no_lbl)
+		else:
+			for rd in reserve:
+				var squad_data := rd as SquadData
+				if not squad_data:
+					continue
+				var leader := squad_data.get_leader()
+				var alive_count := squad_data.get_alive_units().size()
+				var cost := _squad_deploy_cost(squad_data)
+				var btn := Button.new()
+				btn.text = "Deploy: %s  (%d units)  %dg" % [
+					leader.unit_name if leader else "???", alive_count, cost]
+				btn.pressed.connect(_on_deploy_pressed.bind(squad_data))
+				_body_vbox.add_child(btn)
 
 	_body_vbox.add_child(HSeparator.new())
 

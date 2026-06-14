@@ -401,6 +401,9 @@ func _handle(raw: String) -> void:
 				sc_params.height = int(sc_def.map_height)
 				sc_params.num_towns = int(sc_def.num_towns)
 				sc_params.num_castles = int(sc_def.num_castles)
+				sc_params.castles_per_faction = int(sc_def.castles_per_faction)
+				sc_params.town_liberation_gold = int(sc_def.town_liberation_gold)
+				sc_params.town_liberation_unit = sc_def.town_liberation_unit
 				var sc_factions: Array[int] = []
 				for f in sc_def.active_factions:
 					sc_factions.append(int(f))
@@ -778,6 +781,7 @@ func _build_overworld() -> Dictionary:
 				"id": tn.town_data.town_id, "faction": int(tn.faction),
 				"x": tn.global_position.x, "z": tn.global_position.z,
 				"type": int(tn.town_data.town_type),
+				"is_stronghold": tn.town_data.is_stronghold(),
 				"capture_ticks": tn.capture_ticks,
 				"capture_turns": tn.town_data.capture_turns,
 				"capture_owner": cap_owner,

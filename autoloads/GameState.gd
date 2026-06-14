@@ -136,8 +136,31 @@ func check_win_conditions() -> void:
 			winner = hq_result  # non-player result => player HQ was captured (a loss)
 	if winner == -1 and has_strongholds:
 		winner = _check_all_strongholds()
+	# Army-wipe defeat: if the player has no living units left to field (all squads
+	# dead and no reserves), they cannot act — that is a loss.
+	if winner == -1 and not _player_has_units():
+		winner = _first_hostile_faction()  # any hostile faction "wins" => player DEFEAT
 	if winner != -1:
 		trigger_end(winner)
+
+func _player_has_units() -> bool:
+	for sq in player_squads:
+		if is_instance_valid(sq) and sq.squad_data:
+			for u in sq.squad_data.units:
+				if (u as UnitData).is_alive:
+					return true
+	for sd in reserve_squads:
+		if sd is SquadData:
+			for u in (sd as SquadData).units:
+				if (u as UnitData).is_alive:
+					return true
+	return false
+
+func _first_hostile_faction() -> int:
+	for f in active_factions:
+		if f != TerrainDefs.Faction.PLAYER and are_hostile(TerrainDefs.Faction.PLAYER, f):
+			return f
+	return TerrainDefs.Faction.ENEMY_A
 
 func _check_hq_capture() -> int:
 	var map_mgr := _get_map_manager()
@@ -171,15 +194,20 @@ func _check_hq_capture() -> int:
 	return -1
 
 func _check_all_strongholds() -> int:
+	# Win by owning every STRONGHOLD (HQ + castles). Plain towns are optional
+	# liberate-for-reward objectives and do NOT count toward this condition.
 	var map_mgr := _get_map_manager()
 	if not map_mgr:
 		return -1
-	var all_towns := map_mgr.get_towns()
-	if all_towns.is_empty():
+	var strongholds: Array = []
+	for town in map_mgr.get_towns():
+		if town.town_data.is_stronghold():
+			strongholds.append(town)
+	if strongholds.is_empty():
 		return -1
 	for faction in active_factions:
 		var owns_all := true
-		for town in all_towns:
+		for town in strongholds:
 			var town_owner: int = int(town_ownership.get(town.town_data.town_id, town.town_data.starting_faction))
 			if town_owner != faction:
 				owns_all = false

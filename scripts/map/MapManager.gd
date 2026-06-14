@@ -85,8 +85,12 @@ func _spawn_towns(container: Node3D, defs: Array) -> void:
 		data.starting_faction = d["faction"]
 		data.grid_x    = d["grid_x"]
 		data.grid_z    = d["grid_z"]
-		data.is_deploy_point = true
 		data.has_aquatic_recruit = d.get("has_aquatic_recruit", false)
+		# Non-stronghold towns carry the scenario's liberation reward (Phase 3 may
+		# override per-town); strongholds give deploy capability + income, no reward.
+		if not data.is_stronghold():
+			data.liberation_gold = _params.town_liberation_gold
+			data.liberation_unit = _params.town_liberation_unit.duplicate()
 
 		var gpos   := Vector2i(data.grid_x, data.grid_z)
 		var wp     := grid_to_world(gpos)

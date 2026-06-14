@@ -8,8 +8,13 @@ extends Resource
 @export var map_width: int = 32
 @export var map_height: int = 32
 @export var num_towns: int = 6
-@export var num_castles: int = 2
+@export var num_castles: int = 2   # legacy; superseded by castles_per_faction
+@export var castles_per_faction: int = 1   # deploy-strongholds each faction owns besides its HQ
 @export var active_factions: Array[int] = [0, 1]
+
+# Default reward when the player liberates (captures) a non-stronghold town.
+@export var town_liberation_gold: int = 50
+@export var town_liberation_unit: Dictionary = {}   # {class_id, level, unit_name} or empty
 @export var faction_preset: String = "hostile_all"
 @export var win_conditions: Array[String] = ["hq_capture"]
 @export var special_objectives: Array[String] = []

@@ -131,6 +131,54 @@ func _add_unit(data: SquadData, class_id: String, unit_name: String, row: int, c
 func _connect_town_signals() -> void:
 	for town in _map_manager.get_towns():
 		town.town_selected.connect(_on_town_selected)
+		town.town_captured.connect(_on_town_captured)
+
+# Liberation reward: when the PLAYER captures a non-stronghold town for the first
+# time, grant its configured reward (one-time gold and/or a recruit unit). Strongholds
+# give deploy capability + income, not a liberation reward.
+func _on_town_captured(town: TownNode, new_faction: int) -> void:
+	if new_faction != TerrainDefs.Faction.PLAYER:
+		return
+	var td := town.town_data
+	if not td or td.is_stronghold() or td.liberation_claimed:
+		return
+	td.liberation_claimed = true
+	var parts: Array[String] = []
+	if td.liberation_gold > 0:
+		GameState.player_gold += td.liberation_gold
+		GameState.gold_changed.emit(TerrainDefs.Faction.PLAYER, GameState.player_gold)
+		parts.append("+%dg" % td.liberation_gold)
+	if td.liberation_unit and td.liberation_unit.has("class_id"):
+		var lu := td.liberation_unit
+		var unit := UnitRegistry.create_unit(str(lu.get("class_id", "fighter")), int(lu.get("level", 1)))
+		if unit:
+			unit.unit_name = str(lu.get("unit_name", str(lu.get("class_id", "fighter")).capitalize()))
+			unit.faction = TerrainDefs.Faction.PLAYER
+			unit.is_leader = true
+			GameState.persistent_roster.append(unit)
+			if GameState.reserve_squads.size() < GameState.RESERVE_CAP:
+				var sd := SquadData.new()
+				sd.squad_id = "liberated_%d" % Time.get_ticks_msec()
+				sd.faction = TerrainDefs.Faction.PLAYER
+				sd.units = [unit]
+				GameState.reserve_squads.append(sd)
+			parts.append("+%s" % unit.unit_name)
+	if not parts.is_empty():
+		_show_liberation_toast(town.global_position, "Liberated!  " + "  ".join(parts))
+
+func _show_liberation_toast(pos: Vector3, text: String) -> void:
+	var lbl := Label3D.new()
+	lbl.text = text
+	lbl.pixel_size = 0.025
+	lbl.font_size = 16
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.modulate = Color(0.4, 1.0, 0.5)
+	lbl.position = Vector3(pos.x, 2.8, pos.z)
+	add_child(lbl)
+	var tween := create_tween()
+	tween.tween_property(lbl, "position:y", 4.0, 1.4)
+	tween.parallel().tween_property(lbl, "modulate:a", 0.0, 1.4)
+	tween.tween_callback(lbl.queue_free)
 
 func _on_town_selected(town: TownNode) -> void:
 	if not _town_menu:
@@ -204,6 +252,8 @@ func _on_deploy_requested(squad_data: SquadData, town: TownNode) -> void:
 # Returns true on success, false if it couldn't afford it. Public so the DebugServer
 # (test harness) can field multiple squads through the same path the UI uses.
 func deploy_reserve(squad_data: SquadData, town: TownNode, free: bool = false) -> bool:
+	if not town.town_data or not town.town_data.is_stronghold():
+		return false  # reserves can only deploy from strongholds (HQ/castle)
 	var cost := _squad_deploy_cost(squad_data)
 	if not free:
 		if GameState.player_gold < cost:

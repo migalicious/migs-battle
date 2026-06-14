@@ -177,8 +177,10 @@ def _drive_tick(ow, mem):
         avail = [t for t in towns if t["id"] not in claimed and t["id"] not in st["blacklist"]]
         if not avail:
             avail = [t for t in towns if t["id"] not in st["blacklist"]] or towns
-        hqs = [t for t in avail if t.get("type") == 2]
-        pool = hqs if hqs else avail
+        # Prefer enemy STRONGHOLDS (HQ/castle) — owning all of them wins both
+        # hq_capture and all_strongholds; plain towns are opportunistic (income/reward).
+        strongholds = [t for t in avail if t.get("is_stronghold")]
+        pool = strongholds if strongholds else avail
         target = _nearest(pool, sq["x"], sq["z"])
         if target and st["stuck"] >= STUCK_LIMIT:
             st["blacklist"].add(target["id"])

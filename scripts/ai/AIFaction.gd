@@ -41,13 +41,13 @@ func _initial_spawn() -> void:
 	#    walked in and taken with zero combat).
 	_spawn_garrison(hq, "ai_%d_hqdef" % controlled_faction)
 
-	# 2. Claim + garrison the nearest neutral cities (castles preferred, else towns)
-	#    so the faction actually HOLDS defended cities, not just an HQ. The NEUTRAL
-	#    guard stops adjacent factions double-claiming. Owned cities also yield
-	#    income -> earlier reinforcements.
-	for city in _nearest_neutral_cities(hq, GameBalance.AI_GARRISON_CASTLES):
-		city.set_faction(controlled_faction)
-		_spawn_garrison(city, "ai_%d_gar_%d" % [controlled_faction, ti])
+	# 2. Garrison the faction's secondary strongholds (castles it owns at spawn) so
+	#    the player must fight through defended deploy-points, not just the HQ.
+	for town in _map_manager.get_towns_by_faction(controlled_faction):
+		var tn := town as TownNode
+		if tn == hq or not tn.town_data.is_stronghold():
+			continue
+		_spawn_garrison(tn, "ai_%d_gar_%d" % [controlled_faction, ti])
 		ti += 1
 
 	# 3. Roaming patrols (additive to garrisons), spawned around the HQ so they
@@ -77,26 +77,6 @@ func _spawn_garrison(town: TownNode, squad_id: String) -> void:
 	_squad_controller.wire_squad(gsq)
 	gsq.garrison_at(town)
 	town.set_garrison(gsq)
-
-func _nearest_neutral_cities(hq: TownNode, n: int) -> Array:
-	# Nearest claimable neutral settlements to the HQ. Castles (strategic cities)
-	# are preferred; falls back to towns since current maps spawn few/no castles.
-	var pool: Array = []
-	for town in _map_manager.get_towns():
-		var tn := town as TownNode
-		if tn == hq or tn.faction != TerrainDefs.Faction.NEUTRAL:
-			continue
-		if tn.town_data.town_type == TerrainDefs.TownType.HQ:
-			continue
-		pool.append(tn)
-	pool.sort_custom(func(a, b):
-		var ca := 1 if a.town_data.town_type == TerrainDefs.TownType.CASTLE else 0
-		var cb := 1 if b.town_data.town_type == TerrainDefs.TownType.CASTLE else 0
-		if ca != cb:
-			return ca > cb  # castles first
-		return hq.global_position.distance_to(a.global_position) \
-			< hq.global_position.distance_to(b.global_position))
-	return pool.slice(0, maxi(0, n))
 
 # ── Tick Loop ─────────────────────────────────────────────────────────────────
 
@@ -362,6 +342,8 @@ func _consider_reinforcement() -> void:
 
 func _find_unoccupied_friendly_town() -> TownNode:
 	for town in _map_manager.get_towns_by_faction(controlled_faction):
+		if not town.town_data.is_stronghold():
+			continue  # reinforcements deploy only from strongholds
 		if not is_instance_valid(town.garrisoned_squad):
 			var occupied := false
 			for sq in GameState.get_squads_by_faction(controlled_faction):

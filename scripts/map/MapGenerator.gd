@@ -137,7 +137,10 @@ static func _place_towns(grid: Array, params: MapParams) -> Array:
 	var towns: Array = []
 	var placed: Array[Vector2i] = []
 
-	# Place one HQ per active faction using quadrant regions
+	# Each faction: 1 HQ + castles_per_faction secondary strongholds (CASTLE), all
+	# OWNED by the faction at spawn and placed in/near the faction's quadrant region.
+	# (Owned at generation time => no runtime set_faction => no spurious liberation.)
+	var castles_each: int = maxi(0, params.castles_per_faction)
 	for faction in params.active_factions:
 		var region: Array = HQ_REGIONS.get(faction, [0.4, 0.6, 0.4, 0.6]) as Array
 		var x0 := int(params.width  * float(region[0]))
@@ -149,28 +152,27 @@ static func _place_towns(grid: Array, params: MapParams) -> Array:
 			towns.append({"town_id": "%d_hq" % faction, "town_type": TerrainDefs.TownType.HQ,
 				"faction": faction, "grid_x": hq_pos.x, "grid_z": hq_pos.y})
 			placed.append(hq_pos)
+		for c in range(castles_each):
+			var cpos := _find_in_region(grid, params, x0, x1, z0, z1, placed, 3)
+			if cpos != Vector2i(-1, -1):
+				towns.append({"town_id": "%d_castle_%d" % [faction, c],
+					"town_type": TerrainDefs.TownType.CASTLE,
+					"faction": faction, "grid_x": cpos.x, "grid_z": cpos.y})
+				placed.append(cpos)
 
-	# Neutral towns and castles
-	var extra_castles: int = maxi(0, params.num_castles - int(params.active_factions.size()))
-	extra_castles = maxi(0, extra_castles)
-	var neutral_total: int = extra_castles + params.num_towns
+	# Neutral towns scattered across the map — non-deploy, liberate-for-reward objectives.
 	var spawned: int = 0
 	var tries: int   = 0
-
-	while spawned < neutral_total and tries < 1000:
+	while spawned < params.num_towns and tries < 1000:
 		tries += 1
 		var x: int = randi_range(0, params.width  - 1)
 		var z: int = randi_range(0, params.height - 1)
 		var pos := Vector2i(x, z)
 		if not _is_placeable(grid, x, z):
 			continue
-		# HQ positions are already in `placed`; min distance 4 from any placed town/HQ
 		if not _is_far_enough(pos, placed, 4):
 			continue
-		var is_castle: bool = spawned < extra_castles
-		var tid: String = "castle_%d" % spawned if is_castle else "town_%d" % spawned
-		towns.append({"town_id": tid,
-			"town_type": TerrainDefs.TownType.CASTLE if is_castle else TerrainDefs.TownType.TOWN,
+		towns.append({"town_id": "town_%d" % spawned, "town_type": TerrainDefs.TownType.TOWN,
 			"faction": TerrainDefs.Faction.NEUTRAL, "grid_x": x, "grid_z": z})
 		placed.append(pos)
 		spawned += 1
