@@ -29,9 +29,9 @@ func show_unit(unit: UnitData) -> void:
 	_vbox.add_child(hdr)
 
 	var name_lbl := Label.new()
-	name_lbl.text = unit.unit_name
+	name_lbl.text = ("★ HERO  " + unit.unit_name) if unit.is_hero else unit.unit_name
 	name_lbl.add_theme_font_size_override("font_size", 11)
-	name_lbl.modulate = Color(0.78, 0.78, 0.88)
+	name_lbl.modulate = Color(1.0, 0.84, 0.0) if unit.is_hero else Color(0.78, 0.78, 0.88)
 	_vbox.add_child(name_lbl)
 
 	var color_box := ColorRect.new()

@@ -150,7 +150,8 @@ func _on_town_captured(town: TownNode, new_faction: int) -> void:
 		parts.append("+%dg" % td.liberation_gold)
 	if td.liberation_unit and td.liberation_unit.has("class_id"):
 		var lu := td.liberation_unit
-		var unit := UnitRegistry.create_unit(str(lu.get("class_id", "fighter")), int(lu.get("level", 1)))
+		var unit := UnitRegistry.create_unit(str(lu.get("class_id", "fighter")), int(lu.get("level", 1)),
+			bool(lu.get("is_hero", false)))
 		if unit:
 			unit.unit_name = str(lu.get("unit_name", str(lu.get("class_id", "fighter")).capitalize()))
 			unit.faction = TerrainDefs.Faction.PLAYER

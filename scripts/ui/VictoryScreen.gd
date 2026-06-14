@@ -158,7 +158,8 @@ func _deliver_scenario_rewards() -> void:
 	var sdef = cdef.scenarios[sidx]
 	for entry in sdef.reward_units:
 		var e := entry as Dictionary
-		var unit := UnitRegistry.create_unit(str(e.get("class_id", "")), int(e.get("level", 1)))
+		var unit := UnitRegistry.create_unit(str(e.get("class_id", "")), int(e.get("level", 1)),
+			bool(e.get("is_hero", false)))
 		if unit:
 			unit.unit_name = str(e.get("unit_name", "Unknown"))
 			unit.faction = TerrainDefs.Faction.PLAYER

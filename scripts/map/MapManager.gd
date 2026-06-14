@@ -86,11 +86,15 @@ func _spawn_towns(container: Node3D, defs: Array) -> void:
 		data.grid_x    = d["grid_x"]
 		data.grid_z    = d["grid_z"]
 		data.has_aquatic_recruit = d.get("has_aquatic_recruit", false)
-		# Non-stronghold towns carry the scenario's liberation reward (Phase 3 may
-		# override per-town); strongholds give deploy capability + income, no reward.
+		# Non-stronghold towns carry a liberation reward; strongholds give deploy
+		# capability + income only. Coastal towns liberate a merfolk (base filler) so
+		# the player can assemble an aquatic squad; others use the scenario default.
 		if not data.is_stronghold():
 			data.liberation_gold = _params.town_liberation_gold
-			data.liberation_unit = _params.town_liberation_unit.duplicate()
+			if data.has_aquatic_recruit:
+				data.liberation_unit = {"class_id": "merfolk", "level": 1, "unit_name": "Merfolk"}
+			else:
+				data.liberation_unit = _params.town_liberation_unit.duplicate()
 
 		var gpos   := Vector2i(data.grid_x, data.grid_z)
 		var wp     := grid_to_world(gpos)

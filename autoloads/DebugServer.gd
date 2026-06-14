@@ -384,7 +384,7 @@ func _handle(raw: String) -> void:
 			if sc_idx == 0:
 				GameState.persistent_roster = []
 				for entry in sc_campaign.starting_units:
-					var sc_unit := UnitRegistry.create_unit(str(entry["class_id"]), int(entry["level"]))
+					var sc_unit := UnitRegistry.create_unit(str(entry["class_id"]), int(entry["level"]), bool(entry.get("is_hero", false)))
 					if sc_unit:
 						sc_unit.unit_name = str(entry["unit_name"])
 						sc_unit.faction = TerrainDefs.Faction.PLAYER
@@ -421,7 +421,7 @@ func _handle(raw: String) -> void:
 				var prev_sdef = sc_campaign.scenarios[sc_idx - 1]
 				for sc_reward in prev_sdef.reward_units:
 					var sc_re := sc_reward as Dictionary
-					var sc_ru := UnitRegistry.create_unit(str(sc_re.get("class_id", "")), int(sc_re.get("level", 1)))
+					var sc_ru := UnitRegistry.create_unit(str(sc_re.get("class_id", "")), int(sc_re.get("level", 1)), bool(sc_re.get("is_hero", false)))
 					if sc_ru:
 						sc_ru.unit_name = str(sc_re.get("unit_name", "Unknown"))
 						sc_ru.faction = TerrainDefs.Faction.PLAYER
@@ -696,7 +696,7 @@ func _unit_dict(u: UnitData) -> Dictionary:
 		"str": u.strength, "agi": u.agility, "int": u.intelligence,
 		"def": u.defense, "res": u.resistance,
 		"held_item": u.held_item, "alive": u.is_alive,
-		"leader": u.is_leader, "row": u.row, "col": u.col,
+		"leader": u.is_leader, "hero": u.is_hero, "row": u.row, "col": u.col,
 		"xp": u.xp, "xp_to_next": u.xp_to_next,
 		"skills": skills_list,
 	}
@@ -861,6 +861,8 @@ func _split_roster(roster: Array, num_squads: int) -> Array[SquadData]:
 			leaders.append(ud)
 		else:
 			others.append(ud)
+	# Heroes lead first so each squad is fronted by a boosted hero (and gets its movement type).
+	leaders.sort_custom(func(a, b): return (a as UnitData).is_hero and not (b as UnitData).is_hero)
 	for sq in squads:
 		if leaders.is_empty():
 			break

@@ -130,9 +130,9 @@ func _populate_slot(slot: Control, unit: UnitData) -> void:
 	content.add_child(top_row)
 
 	var star_lbl := Label.new()
-	star_lbl.text = "*" if unit.is_leader else " "
+	star_lbl.text = "H" if unit.is_hero else ("*" if unit.is_leader else " ")
 	star_lbl.add_theme_font_size_override("font_size", 11)
-	star_lbl.modulate = Color(0.94, 0.75, 0.25)
+	star_lbl.modulate = Color(1.0, 0.84, 0.0) if unit.is_hero else Color(0.94, 0.75, 0.25)
 	star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_row.add_child(star_lbl)
 

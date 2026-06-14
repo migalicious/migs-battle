@@ -31,7 +31,7 @@ func get_class_def(class_id: String) -> ClassDefinition:
 func get_all_class_defs() -> Array:
 	return _classes.values()
 
-func create_unit(class_id: String, level: int) -> UnitData:
+func create_unit(class_id: String, level: int, is_hero: bool = false) -> UnitData:
 	var cls := get_class_def(class_id)
 	if not cls:
 		push_error("UnitRegistry: unknown class_id '%s'" % class_id)
@@ -40,6 +40,7 @@ func create_unit(class_id: String, level: int) -> UnitData:
 	var unit := UnitData.new()
 	unit.class_id  = class_id
 	unit.level     = 1
+	unit.is_hero   = is_hero   # set BEFORE growth so apply_stat_growth adds the hero bonus
 	unit.max_hp    = cls.base_hp
 	unit.hp        = cls.base_hp
 	unit.strength  = cls.base_strength
@@ -56,6 +57,17 @@ func create_unit(class_id: String, level: int) -> UnitData:
 		unit.level += 1
 		unit.xp_to_next = 100 * unit.level
 		cls.apply_stat_growth(unit)
+
+	if is_hero:
+		# Moderate one-time creation boost on top of growth (a hero clearly out-stats
+		# a base-stat filler of the same class/level). Growth bonus is in apply_stat_growth.
+		unit.max_hp       = int(unit.max_hp * 1.25)
+		unit.strength     = int(unit.strength * 1.25)
+		unit.defense      = int(unit.defense * 1.25)
+		unit.agility      = int(unit.agility * 1.12)
+		unit.intelligence = int(unit.intelligence * 1.12)
+		unit.resistance   = int(unit.resistance * 1.12)
+	unit.hp = unit.max_hp
 
 	return unit
 

@@ -406,9 +406,16 @@ func _on_start_pressed() -> void:
 func _auto_assign_leader(sq: SquadData) -> void:
 	for u in sq.units:
 		u.is_leader = false
+	# Prefer a hero leader (so the boosted unit fronts the squad and its class sets
+	# the squad's movement type); fall back to any can_lead unit.
 	for u in sq.units:
 		var cls: ClassDefinition = UnitRegistry.get_class_def(u.class_id)
-		if cls and cls.can_lead:
+		if u.is_hero and cls and cls.can_lead:
+			u.is_leader = true
+			return
+	for u in sq.units:
+		var cls2: ClassDefinition = UnitRegistry.get_class_def(u.class_id)
+		if cls2 and cls2.can_lead:
 			u.is_leader = true
 			return
 

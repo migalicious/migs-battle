@@ -27,6 +27,7 @@ extends Resource
 # State flags
 @export var is_alive: bool = true
 @export var is_leader: bool = false
+@export var is_hero: bool = false   # named, stat-boosted unit meant to lead a squad
 @export var is_wounded: bool = false
 @export var held_item: String = ""
 

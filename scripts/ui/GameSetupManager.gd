@@ -58,7 +58,8 @@ func _start_campaign_scenario(idx: int) -> void:
 	if idx == 0:
 		GameState.persistent_roster = []
 		for entry in campaign.starting_units:
-			var unit := UnitRegistry.create_unit(str(entry["class_id"]), int(entry["level"]))
+			var unit := UnitRegistry.create_unit(str(entry["class_id"]), int(entry["level"]),
+				bool(entry.get("is_hero", false)))
 			if unit:
 				unit.unit_name = str(entry["unit_name"])
 				unit.faction = TerrainDefs.Faction.PLAYER

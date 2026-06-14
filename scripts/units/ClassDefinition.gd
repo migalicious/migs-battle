@@ -35,9 +35,17 @@ extends Resource
 
 func apply_stat_growth(unit: UnitData) -> void:
 	unit.max_hp += randi_range(hp_growth.x, hp_growth.y)
-	unit.hp = unit.max_hp
 	unit.strength += randi_range(str_growth.x, str_growth.y)
 	unit.agility += randi_range(agi_growth.x, agi_growth.y)
 	unit.intelligence += randi_range(int_growth.x, int_growth.y)
 	unit.defense += randi_range(def_growth.x, def_growth.y)
 	unit.resistance += randi_range(res_growth.x, res_growth.y)
+	if unit.is_hero:
+		# Heroes gain a small extra amount each level, pulling further ahead over time.
+		unit.max_hp += 2
+		unit.strength += 1
+		unit.agility += 1
+		unit.intelligence += 1
+		unit.defense += 1
+		unit.resistance += 1
+	unit.hp = unit.max_hp
