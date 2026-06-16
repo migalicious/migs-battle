@@ -354,11 +354,10 @@ func _build_shop_body() -> void:
 	var item_opt := OptionButton.new()
 	item_opt.name = "ItemOption"
 	item_opt.add_item("(none)")
-	for iid in GameState.player_inventory.keys():
-		if (GameState.player_inventory[iid] as int) > 0:
-			var itm = ItemRegistry.get_item(iid)
-			if itm:
-				item_opt.add_item(itm.display_name)
+	for iid in _equippable_inventory_keys():
+		var itm = ItemRegistry.get_item(iid)
+		if itm:
+			item_opt.add_item(itm.display_name)
 	_body_vbox.add_child(item_opt)
 
 	var equip_btn := Button.new()
@@ -375,6 +374,18 @@ func _build_shop_body() -> void:
 		call_deferred("_build_friendly_body", GameState.reserve_squads))
 	_body_vbox.add_child(back_btn)
 
+# Inventory item_ids the player owns (qty>0) that are PASSIVE equipment. Consumables are
+# excluded — they're applied to a squad via the field "Use" action, not equipped to a slot.
+func _equippable_inventory_keys() -> Array:
+	var keys: Array = []
+	for iid in GameState.player_inventory.keys():
+		if (GameState.player_inventory[iid] as int) <= 0:
+			continue
+		var itm = ItemRegistry.get_item(iid)
+		if itm and itm.item_type == ItemDefinition.ItemType.PASSIVE:
+			keys.append(iid)
+	return keys
+
 func _on_buy_pressed(item_id: String, cost: int) -> void:
 	if GameState.player_gold < cost:
 		return
@@ -390,11 +401,7 @@ func _on_equip_pressed(unit_opt: OptionButton, item_opt: OptionButton, all_units
 	var unit: UnitData = all_units[unit_opt.selected]
 	if unit.held_item != "":
 		GameState.player_inventory[unit.held_item] = GameState.player_inventory.get(unit.held_item, 0) + 1
-	var inv_keys := GameState.player_inventory.keys()
-	var non_empty_keys: Array = []
-	for k in inv_keys:
-		if (GameState.player_inventory[k] as int) > 0:
-			non_empty_keys.append(k)
+	var non_empty_keys: Array = _equippable_inventory_keys()
 	var sel_idx := item_opt.selected - 1
 	if sel_idx < 0 or sel_idx >= non_empty_keys.size():
 		return

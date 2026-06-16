@@ -140,14 +140,17 @@ func _show_alliance_popup(event) -> void:
 	var hud := get_tree().current_scene.get_node_or_null("HUD") as CanvasLayer
 	if not hud:
 		return
-	get_tree().paused = true
+	# NOTE: deliberately do NOT pause the tree. The overworld is real-time; a modal
+	# full-pause froze every squad until the offer was answered, which (a) stalled
+	# automated play / the win-rate harness and (b) is heavy-handed UX for a side
+	# event. The offer panel below stays on screen and answerable while the world
+	# keeps running — answer it whenever; ignoring it simply leaves relations as-is.
 
 	var panel := Panel.new()
 	panel.size = Vector2(480, 180)
 	panel.position = Vector2(
 		(get_viewport().size.x - 480) / 2.0,
 		(get_viewport().size.y - 180) / 2.0)
-	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -176,7 +179,6 @@ func _show_alliance_popup(event) -> void:
 	accept_btn.custom_minimum_size = Vector2(160, 36)
 	accept_btn.pressed.connect(func():
 		GameState.set_relation(ev.from_faction, ev.to_faction, GameState.Relation.ALLIED)
-		get_tree().paused = false
 		panel.queue_free()
 		_active_popup = null)
 	hbox.add_child(accept_btn)
@@ -185,7 +187,6 @@ func _show_alliance_popup(event) -> void:
 	refuse_btn.text = "Refuse"
 	refuse_btn.custom_minimum_size = Vector2(120, 36)
 	refuse_btn.pressed.connect(func():
-		get_tree().paused = false
 		panel.queue_free()
 		_active_popup = null)
 	hbox.add_child(refuse_btn)

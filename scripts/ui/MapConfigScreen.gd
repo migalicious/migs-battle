@@ -16,6 +16,7 @@ var _win_option: OptionButton = null
 var _last_seed_lbl: Label = null
 var _replay_btn: Button = null
 var _factions_option: OptionButton = null
+var _difficulty_option: OptionButton = null
 
 var _last_seed: int = 0
 
@@ -114,6 +115,15 @@ func _build_ui() -> void:
 	_win_option.selected = 0
 	vbox.add_child(_win_option)
 
+	# Difficulty (reusable DifficultyConfig presets — also used by the campaign)
+	vbox.add_child(_make_label("Difficulty"))
+	_difficulty_option = OptionButton.new()
+	_difficulty_option.name = "DifficultyOption"
+	for cfg in DifficultyConfig.presets():
+		_difficulty_option.add_item(cfg.display_name)
+	_difficulty_option.selected = 1  # Veteran
+	vbox.add_child(_difficulty_option)
+
 	vbox.add_child(HSeparator.new())
 
 	# Last seed row
@@ -179,6 +189,11 @@ func _on_generate_pressed() -> void:
 	params.num_towns   = int(_towns_slider.value)
 	params.num_castles = int(_castles_slider.value)
 	params.active_factions = _faction_count_to_array(_factions_option.selected + 2)
+	# Reusable difficulty system: apply the chosen preset (drives enemy strength/density).
+	var presets := DifficultyConfig.presets()
+	var diff: DifficultyConfig = presets[clampi(_difficulty_option.selected, 0, presets.size() - 1)]
+	GameState.active_difficulty = diff
+	params.castles_per_faction = diff.castles_per_faction
 	config_ready.emit(params, _get_win_conditions(), params.active_factions)
 
 func _faction_count_to_array(count: int) -> Array[int]:

@@ -14,8 +14,6 @@ static func resolve(attacker: SquadData, defender: SquadData,
 	var def_units: Array[UnitData] = _copy_units(defender.units)
 	var battle_log: Array[BattleAction] = []
 
-	_apply_consumables(atk_units, def_units)
-
 	for round_num in range(GameBalance.ROUNDS):
 		if _all_dead(atk_units) or _all_dead(def_units):
 			break
@@ -198,17 +196,6 @@ static func _get_stat(unit: UnitData, stat: String) -> float:
 		"resistance":   return base + float(item.res_bonus)
 		"intelligence": return base + float(item.int_bonus)
 	return base
-
-static func _apply_consumables(atk_units: Array[UnitData], def_units: Array[UnitData]) -> void:
-	for u in atk_units + def_units:
-		if not u.is_alive or u.held_item == "":
-			continue
-		var item = ItemRegistry.get_item(u.held_item)
-		if not item or item.item_type != _ItemDef.ItemType.CONSUMABLE:
-			continue
-		if item.heal_percent > 0.0:
-			u.hp = mini(u.max_hp, u.hp + int(float(u.max_hp) * item.heal_percent))
-		u.held_item = ""
 
 static func _build_context(actor: UnitData, allies: Array[UnitData],
 		enemies: Array[UnitData], round_num: int, on_water: bool = false) -> Dictionary:

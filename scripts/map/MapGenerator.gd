@@ -200,53 +200,51 @@ static func _flatten_town_cells(grid: Array, towns: Array) -> void:
 # ── Road pass (A*) ───────────────────────────────────────────────────────────
 
 static func _apply_roads(grid: Array, params: MapParams, towns: Array) -> void:
-	# Road connects faction-0 HQ to faction-1 HQ
-	var phq := Vector2i(-1, -1)
-	var ehq := Vector2i(-1, -1)
-	for t in towns:
-		if   t["town_id"] == "0_hq": phq = Vector2i(t["grid_x"], t["grid_z"])
-		elif t["town_id"] == "1_hq": ehq = Vector2i(t["grid_x"], t["grid_z"])
-	if phq == Vector2i(-1, -1) or ehq == Vector2i(-1, -1):
+	# Connect EVERY town with a road spanning tree so all strongholds/towns are
+	# reachable by land. A* may bridge water / cut through mountains at high cost,
+	# carving ROAD (which is passable and ON the navmesh) — guaranteeing that
+	# infantry (and the AI/bot) can always route between objectives. Without this,
+	# water/mountain can isolate land masses and strand squads (and human players).
+	if towns.size() < 2:
 		return
-	var path: Array[Vector2i] = _astar(grid, params, phq, ehq)
-	for pos in path:
-		var pv: Vector2i = pos
-		var t: int = grid[pv.x][pv.y]
-		if t != TerrainDefs.TerrainType.WATER and t != TerrainDefs.TerrainType.MOUNTAIN:
-			grid[pv.x][pv.y] = TerrainDefs.TerrainType.ROAD
+	var pts: Array[Vector2i] = []
+	for t in towns:
+		pts.append(Vector2i(t["grid_x"], t["grid_z"]))
+	var connected: Array[Vector2i] = [pts[0]]   # pts[0] = the player (faction 0) HQ
+	var remaining: Array[Vector2i] = pts.slice(1)
+	while not remaining.is_empty():
+		# Connect the remaining town nearest to any already-connected town (Prim-like).
+		var best_ri := 0
+		var best_c := connected[0]
+		var best_d := 1 << 30
+		for ri in range(remaining.size()):
+			for c in connected:
+				var dd: int = abs(remaining[ri].x - c.x) + abs(remaining[ri].y - c.y)
+				if dd < best_d:
+					best_d = dd
+					best_ri = ri
+					best_c = c
+		_carve_road(grid, params, best_c, remaining[best_ri])
+		connected.append(remaining[best_ri])
+		remaining.remove_at(best_ri)
 
-static func _astar(grid: Array, params: MapParams, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
-	var open: Array    = [[0, start]]   # [f_cost, Vector2i]
-	var from: Dictionary = {}
-	var g:    Dictionary = {}
-	g[start] = 0
-	var dirs: Array = [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]
+static func _carve_road(grid: Array, params: MapParams, a: Vector2i, b: Vector2i) -> void:
+	# 4-connected staircase from a to b (one orthogonal step at a time). 4-connectivity
+	# matters: the navmesh joins cells that share an EDGE, so a diagonal (corner-only)
+	# road would not be traversable. Carving ROAD bridges water and cuts mountain passes,
+	# and ROAD is on the navmesh — so every town stays reachable. Fast: O(manhattan dist).
+	var x := a.x
+	var y := a.y
+	_set_road(grid, params, x, y)
+	while x != b.x or y != b.y:
+		if abs(b.x - x) >= abs(b.y - y) and x != b.x:
+			x += 1 if b.x > x else -1
+		elif y != b.y:
+			y += 1 if b.y > y else -1
+		else:
+			x += 1 if b.x > x else -1
+		_set_road(grid, params, x, y)
 
-	while not open.is_empty():
-		open.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
-		var entry: Array    = open.pop_front()
-		var cur:   Vector2i = entry[1]
-
-		if cur == goal:
-			var path: Array[Vector2i] = []
-			while from.has(cur):
-				path.append(cur)
-				cur = from[cur]
-			path.reverse()
-			return path
-
-		for d in dirs:
-			var dir: Vector2i = d
-			var nxt := Vector2i(cur.x + dir.x, cur.y + dir.y)
-			if nxt.x < 0 or nxt.x >= params.width or nxt.y < 0 or nxt.y >= params.height:
-				continue
-			var t: int = grid[nxt.x][nxt.y]
-			if t == TerrainDefs.TerrainType.WATER or t == TerrainDefs.TerrainType.MOUNTAIN:
-				continue
-			var ng: int = (g[cur] as int) + 1
-			if not g.has(nxt) or ng < (g[nxt] as int):
-				g[nxt] = ng
-				open.append([ng + abs(nxt.x - goal.x) + abs(nxt.y - goal.y), nxt])
-				from[nxt] = cur
-
-	return []
+static func _set_road(grid: Array, params: MapParams, x: int, y: int) -> void:
+	if x >= 0 and x < params.width and y >= 0 and y < params.height:
+		grid[x][y] = TerrainDefs.TerrainType.ROAD

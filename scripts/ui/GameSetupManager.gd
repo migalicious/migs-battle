@@ -100,9 +100,12 @@ func _apply_scenario(scenario) -> void:
 	params.height      = int(scenario.map_height)
 	params.num_towns   = int(scenario.num_towns)
 	params.num_castles = int(scenario.num_castles)
-	params.castles_per_faction = int(scenario.castles_per_faction)
 	params.town_liberation_gold = int(scenario.town_liberation_gold)
 	params.town_liberation_unit = scenario.town_liberation_unit
+	# Difficulty config drives enemy strength/density (and castles-per-faction).
+	var diff: DifficultyConfig = scenario.difficulty if scenario.difficulty else DifficultyConfig.default()
+	GameState.active_difficulty = diff
+	params.castles_per_faction = diff.castles_per_faction
 
 	var factions: Array[int] = []
 	for f in scenario.active_factions:

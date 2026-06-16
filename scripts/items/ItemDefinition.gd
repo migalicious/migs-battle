@@ -16,4 +16,6 @@ enum ItemType { PASSIVE, CONSUMABLE }
 @export var agi_bonus: int = 0
 @export var int_bonus: int = 0
 
-@export var heal_percent: float = 0.0
+@export var heal_percent: float = 0.0     # CONSUMABLE: heals this fraction of max HP
+@export var revive_percent: float = 0.0   # CONSUMABLE: >0 revives one fallen unit to this fraction of max HP
+@export var squad_wide: bool = false      # CONSUMABLE: heal_percent applies to every living unit in the squad

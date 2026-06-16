@@ -36,7 +36,12 @@ var difficulty_permadeath: bool = false
 var campaign_def = null      # CampaignDef instance (untyped)
 var campaign_retry: bool = false  # true when retrying same scenario after defeat
 var pre_scenario_levels: Dictionary = {}  # unit_name -> level before the last scenario
-var enemy_difficulty_mult: float = 1.0
+var enemy_difficulty_mult: float = 1.0   # legacy; superseded by active_difficulty
+# Active difficulty config (set per map by the campaign / random-map flow). The AI reads it.
+var active_difficulty: DifficultyConfig = null
+
+func get_difficulty() -> DifficultyConfig:
+	return active_difficulty if active_difficulty else DifficultyConfig.default()
 
 var is_loading_save: bool = false
 var save_squad_data: Dictionary = {}
@@ -46,6 +51,69 @@ var enemy_gold: int = 100
 var gold_tick_interval: float = GameBalance.GOLD_TICK_INTERVAL
 var _gold_timer: float = 0.0
 var player_inventory: Dictionary = {}
+
+# Use a consumable from the bag on a squad. Effects: revive a fallen unit (revive_percent),
+# heal the whole squad (squad_wide), or heal one unit (heal_percent — most-wounded by default,
+# or target_unit_name). Returns {ok, msg/item}. Consumes one from player_inventory on success.
+func use_consumable(squad_data: SquadData, item_id: String, target_unit_name: String = "") -> Dictionary:
+	if not squad_data:
+		return {"ok": false, "msg": "no squad"}
+	var have: int = player_inventory.get(item_id, 0)
+	if have <= 0:
+		return {"ok": false, "msg": "none in inventory"}
+	var item = ItemRegistry.get_item(item_id)
+	if not item or item.item_type != ItemDefinition.ItemType.CONSUMABLE:
+		return {"ok": false, "msg": "not a consumable"}
+
+	var applied := false
+	if item.revive_percent > 0.0:
+		var target: UnitData = null
+		for u in squad_data.units:
+			if not u.is_alive and (target_unit_name == "" or u.unit_name == target_unit_name):
+				target = u
+				break
+		if target:
+			target.is_alive = true
+			target.hp = maxi(1, int(float(target.max_hp) * item.revive_percent))
+			target.is_wounded = float(target.hp) / float(maxi(target.max_hp, 1)) < 0.25
+			applied = true
+	elif item.squad_wide and item.heal_percent > 0.0:
+		for u in squad_data.units:
+			if u.is_alive and u.hp < u.max_hp:
+				_heal_unit(u, item.heal_percent)
+				applied = true
+	elif item.heal_percent > 0.0:
+		var target := _pick_heal_target(squad_data, target_unit_name)
+		if target:
+			_heal_unit(target, item.heal_percent)
+			applied = true
+
+	if not applied:
+		return {"ok": false, "msg": "no valid target"}
+	player_inventory[item_id] = have - 1
+	return {"ok": true, "item": item_id}
+
+func _heal_unit(u: UnitData, frac: float) -> void:
+	u.hp = mini(u.max_hp, u.hp + int(float(u.max_hp) * frac))
+	u.is_wounded = float(u.hp) / float(maxi(u.max_hp, 1)) < 0.25
+
+func _pick_heal_target(squad_data: SquadData, target_unit_name: String) -> UnitData:
+	if target_unit_name != "":
+		for u in squad_data.units:
+			if u.is_alive and u.unit_name == target_unit_name:
+				return u
+		return null
+	# Default: the living unit missing the most HP (no-op if everyone is full).
+	var best: UnitData = null
+	var best_missing := 0
+	for u in squad_data.units:
+		if not u.is_alive:
+			continue
+		var missing := u.max_hp - u.hp
+		if missing > best_missing:
+			best_missing = missing
+			best = u
+	return best
 
 func _ready() -> void:
 	_init_default_relations()
@@ -253,7 +321,13 @@ func reset() -> void:
 	campaign_retry = false
 	pre_scenario_levels = {}
 	enemy_difficulty_mult = 1.0
+	active_difficulty = null
 	_init_default_relations()
+	# Clear any battle state left over from a previous game/run so combat can trigger.
+	if Engine.has_singleton("BattleManager") or has_node("/root/BattleManager"):
+		var bm := get_node_or_null("/root/BattleManager")
+		if bm and bm.has_method("reset"):
+			bm.reset()
 
 # ── Campaign Unit Persistence ─────────────────────────────────────────────────
 

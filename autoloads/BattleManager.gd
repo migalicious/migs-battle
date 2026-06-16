@@ -13,7 +13,24 @@ var _current_result: BattleResult = null
 func _ready() -> void:
 	pass
 
+# Clear all in-battle state. MUST be called when a scenario starts/restarts: if a run
+# ends while a battle is mid-resolution (e.g. a timeout/restart before the result screen
+# is dismissed), `_in_battle` would otherwise stay true forever and silently block EVERY
+# future collision — the campaign would load with zero battles possible. Also frees any
+# orphaned battle scene left under the tree root by an interrupted battle.
+func reset() -> void:
+	_in_battle = false
+	_current_attacker = null
+	_current_defender = null
+	_current_result = null
+	var root := get_tree().root
+	for child in root.get_children():
+		if child is BattleAnimator:
+			child.queue_free()
+
 func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
+	if not is_instance_valid(sq_a) or not is_instance_valid(sq_b):
+		return  # a deferred collision signal can fire after a squad was freed
 	if _in_battle or sq_a.in_battle or sq_b.in_battle:
 		return
 	if not GameState.are_hostile(sq_a.faction, sq_b.faction):
@@ -36,13 +53,9 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 		var _dg := _mm.world_to_grid(sq_b.global_position)
 		atk_on_water = _mm.get_terrain(_ag.x, _ag.y) == _WATER
 		def_on_water = _mm.get_terrain(_dg.x, _dg.y) == _WATER
-	# Heal wounded units to full before a fresh encounter — but NOT for a besieged
-	# garrison. A defender under repeated assault must accumulate damage, otherwise
-	# an attacker that can't wipe it in one 4-round battle could never take the town.
-	if not sq_a.is_garrisoned:
-		_heal_wounded_before_battle(sq_a.squad_data)
-	if not sq_b.is_garrisoned:
-		_heal_wounded_before_battle(sq_b.squad_data)
+	# NO pre-battle healing. Wounds persist between encounters for both sides; the ONLY
+	# way to recover is to retreat to a player-owned building and heal in garrison. Free
+	# pre-battle healing would make retreating pointless and enemy forces unkillable.
 	_current_result = BattleResolver.resolve(sq_a.squad_data, sq_b.squad_data, atk_on_water, def_on_water)
 	_precompute_level_ups(_current_result)
 	battle_started.emit(sq_a.squad_data, sq_b.squad_data)
@@ -70,26 +83,29 @@ func _on_battle_completed(scene: BattleAnimator) -> void:
 # ── Result Application ────────────────────────────────────────────────────────
 
 func _apply_result() -> void:
-	_apply_unit_states(_current_attacker.squad_data, _current_result.attacker_unit_states)
-	_apply_unit_states(_current_defender.squad_data, _current_result.defender_unit_states)
+	# Guard against a participant that was freed before the result applies (e.g. a
+	# squad wiped/retreated via a deferred collision signal). Previously this crashed.
+	var atk_ok := is_instance_valid(_current_attacker) and _current_attacker.squad_data != null
+	var def_ok := is_instance_valid(_current_defender) and _current_defender.squad_data != null
 
-	_grant_xp(_current_attacker.squad_data, _current_result.attacker_xp)
-	_grant_xp(_current_defender.squad_data, _current_result.defender_xp)
+	if atk_ok:
+		_apply_unit_states(_current_attacker.squad_data, _current_result.attacker_unit_states)
+		_grant_xp(_current_attacker.squad_data, _current_result.attacker_xp)
+	if def_ok:
+		_apply_unit_states(_current_defender.squad_data, _current_result.defender_unit_states)
+		_grant_xp(_current_defender.squad_data, _current_result.defender_xp)
 
-	if _current_result.attacker_wiped:
-		_handle_loser(_current_attacker)
-	else:
-		_current_attacker.in_battle = false
+	if atk_ok:
+		if _current_result.attacker_wiped:
+			_handle_loser(_current_attacker)
+		else:
+			_current_attacker.in_battle = false
 
-	if _current_result.defender_wiped:
-		_handle_loser(_current_defender)
-	else:
-		_current_defender.in_battle = false
-
-func _heal_wounded_before_battle(data: SquadData) -> void:
-	for u in data.units:
-		if u.is_alive and u.is_wounded:
-			u.hp = u.max_hp
+	if def_ok:
+		if _current_result.defender_wiped:
+			_handle_loser(_current_defender)
+		else:
+			_current_defender.in_battle = false
 
 func _apply_unit_states(data: SquadData, states: Array[UnitData]) -> void:
 	for state in states:

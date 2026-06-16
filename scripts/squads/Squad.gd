@@ -23,11 +23,18 @@ var garrison_town: TownNode = null
 @onready var _collision: CollisionShape3D = $Collision
 @onready var _detection_area: Area3D = $DetectionArea
 
+# Stuck-detection tuning (see _physics_process).
+const STUCK_STOP_TIME := 0.5    # game-time seconds of zero progress before reacting
+const ARRIVAL_RADIUS := 2.0     # "close enough" to the destination to treat a stall as arrival
+const MAX_REPATH_TRIES := 4     # open-ground re-path attempts before giving up and stopping
+const BLOCK_RANGE := 1.6        # a hostile within this distance is treated as physically blocking
+
 var _is_selected: bool = false
 var _is_moving: bool = false
 var _destination: Vector3 = Vector3.ZERO
 var _stuck_time: float = 0.0
 var _last_progress_pos: Vector3 = Vector3.ZERO
+var _repath_tries: int = 0
 var _is_flying: bool = false
 var _is_aquatic: bool = false
 var _path_line: MeshInstance3D = null
@@ -196,18 +203,38 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_update_terrain_speed()
 
-	# Stuck detection: if blocked from progressing toward the destination (e.g. a
-	# defender's body sits on the target town), stop so squad_arrived fires and the
-	# arrival logic engages/captures. Without this the squad spins in place forever
-	# and never triggers a battle at a garrisoned town.
+	# Stuck detection. A squad stops making progress for one of two reasons:
+	#   (1) it's pressed up against a hostile body — most importantly a town's garrison,
+	#       which sits on the objective. This MUST become a battle; relying on the
+	#       DetectionArea's area_entered alone proved unreliable (a body-block after the
+	#       areas were already overlapping fires no fresh enter event), so a parked squad
+	#       could sit on an enemy HQ forever without fighting.
+	#   (2) a transient nav/terrain hitch on a long open path (common on big 48x48 maps).
+	#       The old code treated this as an "arrival" and halted the squad in open country,
+	#       far short of its objective, so it never reached anything to fight or capture.
+	# So: if a hostile is blocking, force the engagement. Otherwise re-path and keep
+	# pushing, only finally stopping (→ squad_arrived → capture/garrison logic) once we've
+	# exhausted retries or are genuinely at the destination.
 	if global_position.distance_to(_last_progress_pos) > 0.06:
 		_last_progress_pos = global_position
 		_stuck_time = 0.0
+		_repath_tries = 0
 	else:
 		_stuck_time += delta
-		if _stuck_time > 0.5:
+		if _stuck_time > STUCK_STOP_TIME:
 			_stuck_time = 0.0
-			_stop_moving()
+			var foe := _blocking_hostile()
+			if foe:
+				squad_collided_with_enemy.emit(self, foe)
+				_stop_moving()
+			elif global_position.distance_to(_destination) <= ARRIVAL_RADIUS \
+					or _repath_tries >= MAX_REPATH_TRIES:
+				_repath_tries = 0
+				_stop_moving()
+			else:
+				_repath_tries += 1
+				if not _is_flying and not _is_aquatic and _nav_agent:
+					_nav_agent.target_position = _destination
 
 func _stop_moving() -> void:
 	_is_moving = false
@@ -236,6 +263,7 @@ func set_destination(world_pos: Vector3) -> void:
 	_is_moving = true
 	_last_progress_pos = global_position
 	_stuck_time = 0.0
+	_repath_tries = 0
 	if not _is_flying and not _is_aquatic and _nav_agent:
 		_nav_agent.target_position = _destination
 
@@ -276,6 +304,25 @@ func retreat_to(world_pos: Vector3) -> void:
 	garrison_town = null
 	if _path_line:
 		_path_line.visible = false
+
+# Nearest hostile squad physically blocking us (within BLOCK_RANGE), if any — used by
+# stuck detection to force a battle when wedged against an enemy (e.g. a town garrison).
+func _blocking_hostile() -> Squad:
+	if in_battle:
+		return null
+	var best: Squad = null
+	var best_d := BLOCK_RANGE * BLOCK_RANGE
+	for f in GameState.active_factions:
+		if not GameState.are_hostile(faction, f):
+			continue
+		for sq in GameState.get_squads_by_faction(f):
+			if not is_instance_valid(sq) or sq.in_battle:
+				continue
+			var d := global_position.distance_squared_to(sq.global_position)
+			if d < best_d:
+				best_d = d
+				best = sq
+	return best
 
 func _is_on_impassable_terrain() -> bool:
 	if not map_manager or not squad_data:

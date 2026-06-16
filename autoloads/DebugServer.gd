@@ -6,6 +6,7 @@ const _ItemDef = preload("res://scripts/items/ItemDefinition.gd")
 var _server: TCPServer = null
 var _client: StreamPeerTCP = null
 var _buf: String = ""
+var _roster_snapshot: Array = []   # deep-copied persistent_roster for win-rate re-runs
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # stay active even when tree is paused (e.g. alliance popup)
@@ -238,6 +239,36 @@ func _handle(raw: String) -> void:
 			else:
 				GameState.player_inventory[gi_id] = GameState.player_inventory.get(gi_id, 0) + gi_qty
 				_send({"ok": true, "item": gi_id, "qty": GameState.player_inventory[gi_id]})
+		"debug_wound":
+			# Test affordance: set every unit in a squad to frac*max_hp, and mark the first
+			# `kill` units dead. Lets the harness verify heal/revive + retreat-to-heal.
+			var dw_sq := _find_live_squad(str(d.get("id", "")))
+			if dw_sq == null or dw_sq.squad_data == null:
+				_send({"error": "unknown squad: %s" % str(d.get("id", ""))})
+			else:
+				var dw_frac: float = clampf(float(d.get("frac", 0.2)), 0.0, 1.0)
+				var dw_kill: int = int(d.get("kill", 0))
+				var dw_i := 0
+				for u in dw_sq.squad_data.units:
+					var ud := u as UnitData
+					if dw_i < dw_kill:
+						ud.is_alive = false
+						ud.hp = 0
+						ud.is_wounded = false
+					else:
+						ud.hp = maxi(1, int(float(ud.max_hp) * dw_frac))
+						ud.is_wounded = float(ud.hp) / float(maxi(ud.max_hp, 1)) < 0.25
+					dw_i += 1
+				_send({"ok": true})
+		"use_item":
+			var ui_item := str(d.get("item", ""))
+			var ui_target := str(d.get("target", ""))
+			var ui_sq := _find_live_squad(str(d.get("id", "")))
+			if ui_sq == null or ui_sq.squad_data == null:
+				_send({"error": "unknown squad: %s" % str(d.get("id", ""))})
+			else:
+				var ui_res: Dictionary = GameState.use_consumable(ui_sq.squad_data, ui_item, ui_target)
+				_send(ui_res)
 		"set_gold":
 			var sg_amount: int = int(d.get("amount", 0))
 			GameState.player_gold = sg_amount
@@ -369,6 +400,7 @@ func _handle(raw: String) -> void:
 			var sc_idx: int = int(d.get("scenario_idx", 0))
 			var permadeath: bool = bool(d.get("permadeath", false))
 			var sc_num_squads: int = int(d.get("num_squads", 1))
+			var sc_skip_rewards: bool = bool(d.get("skip_rewards", false))
 			const _CampaignDef = preload("res://scripts/campaign/CampaignDef.gd")
 			if sc_idx == 0:
 				GameState.reset()
@@ -401,7 +433,6 @@ func _handle(raw: String) -> void:
 				sc_params.height = int(sc_def.map_height)
 				sc_params.num_towns = int(sc_def.num_towns)
 				sc_params.num_castles = int(sc_def.num_castles)
-				sc_params.castles_per_faction = int(sc_def.castles_per_faction)
 				sc_params.town_liberation_gold = int(sc_def.town_liberation_gold)
 				sc_params.town_liberation_unit = sc_def.town_liberation_unit
 				var sc_factions: Array[int] = []
@@ -410,14 +441,16 @@ func _handle(raw: String) -> void:
 				sc_params.active_factions = sc_factions
 				GameState.pending_map_params = sc_params
 				GameState.active_factions = sc_factions
-				GameState.enemy_difficulty_mult = float(sc_def.enemy_difficulty_mult)
+				var sc_diff: DifficultyConfig = sc_def.difficulty if sc_def.difficulty else DifficultyConfig.default()
+				GameState.active_difficulty = sc_diff
+				sc_params.castles_per_faction = sc_diff.castles_per_faction
 				GameState._init_default_relations()
 				GameState.active_conditions = []
 				for wc in sc_def.win_conditions:
 					GameState.active_conditions.append(str(wc))
 			# For sc_idx > 0, deliver the previous scenario's reward units into persistent_roster.
 			# This mirrors what VictoryScreen._deliver_scenario_rewards() does in real play.
-			if sc_idx > 0 and sc_idx - 1 < sc_campaign.scenarios.size():
+			if not sc_skip_rewards and sc_idx > 0 and sc_idx - 1 < sc_campaign.scenarios.size():
 				var prev_sdef = sc_campaign.scenarios[sc_idx - 1]
 				for sc_reward in prev_sdef.reward_units:
 					var sc_re := sc_reward as Dictionary
@@ -442,6 +475,7 @@ func _handle(raw: String) -> void:
 				GameState.town_ownership = {}
 				GameState.current_phase = GameState.Phase.OVERWORLD
 			get_tree().paused = false  # clear any stale pause from a previous popup
+			BattleManager.reset()      # clear any stuck in-battle state from an interrupted run
 			get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
 			_send({"ok": true, "scenario_idx": sc_idx})
 		"get_campaign_state":
@@ -530,6 +564,21 @@ func _handle(raw: String) -> void:
 			_send({"ok": true, "previous": ts_prev, "scale": ts_scale})
 		"deploy_squad":
 			_send(_deploy_squad(d))
+		"snapshot_roster":
+			_roster_snapshot = []
+			for u in GameState.persistent_roster:
+				_roster_snapshot.append((u as UnitData).duplicate(true))
+			_send({"ok": true, "size": _roster_snapshot.size()})
+		"restore_roster":
+			if _roster_snapshot.is_empty():
+				_send({"error": "no snapshot"})
+			else:
+				GameState.persistent_roster = []
+				for u in _roster_snapshot:
+					var rs_ud := (u as UnitData).duplicate(true) as UnitData
+					rs_ud.class_def = UnitRegistry.get_class_def(rs_ud.class_id)
+					GameState.persistent_roster.append(rs_ud)
+				_send({"ok": true, "size": GameState.persistent_roster.size()})
 		_:
 			_send({"error": "unknown action: %s" % d.get("action", "")})
 
@@ -647,6 +696,7 @@ func _item_dict(item) -> Dictionary:
 		"hp": item.hp_bonus, "str": item.str_bonus, "agi": item.agi_bonus,
 		"int": item.int_bonus, "def": item.def_bonus, "res": item.res_bonus,
 		"heal_pct": item.heal_percent,
+		"revive_pct": item.revive_percent, "squad_wide": item.squad_wide,
 	}
 
 func _atk_dict(atk) -> Dictionary:
@@ -710,6 +760,14 @@ func _squad_dict(sd: SquadData) -> Dictionary:
 func _send(data: Dictionary) -> void:
 	if _client and _client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		_client.put_data((JSON.stringify(data) + "\n").to_utf8_buffer())
+		# Close after replying so the client's recv gets EOF immediately instead of
+		# blocking on its socket timeout. The client opens a fresh connection per
+		# request, so one response == one connection. This turns multi-second-per-call
+		# latency into milliseconds — critical for the win-rate harness's tight loops.
+		_client.poll()
+		_client.disconnect_from_host()
+		_client = null
+		_buf = ""
 
 
 # ── Overworld automation (real-play bridge) ─────────────────────────────────────
@@ -844,7 +902,7 @@ func _move_squad(d: Dictionary) -> Dictionary:
 
 func _split_roster(roster: Array, num_squads: int) -> Array[SquadData]:
 	# Cap so each squad keeps ~2+ units (a player wouldn't field 1-unit squads).
-	var n := clampi(num_squads, 1, maxi(1, int(roster.size() / 2.0)))
+	var n := clampi(num_squads, 1, maxi(1, int(roster.size() / 3.0)))   # >=3 units/squad
 	var squads: Array[SquadData] = []
 	for i in range(n):
 		var sd := SquadData.new()

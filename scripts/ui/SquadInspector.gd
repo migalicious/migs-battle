@@ -10,6 +10,8 @@ var _slots: Array[Control] = []
 var _speed_lbl: Label = null
 var _movement_lbl: Label = null
 var _popup: UnitDetailPopup = null
+var _items_box: VBoxContainer = null
+var _current_data: SquadData = null
 
 func _ready() -> void:
 	_build_ui()
@@ -81,6 +83,65 @@ func _build_ui() -> void:
 	_speed_lbl.text = "Speed: ---"
 	_speed_lbl.add_theme_font_size_override("font_size", 11)
 	vbox.add_child(_speed_lbl)
+
+	vbox.add_child(HSeparator.new())
+
+	# Consumables — one "Use" button per owned consumable, applied to the shown squad.
+	_items_box = VBoxContainer.new()
+	_items_box.add_theme_constant_override("separation", 2)
+	vbox.add_child(_items_box)
+
+func _rebuild_items() -> void:
+	if not _items_box:
+		return
+	for c in _items_box.get_children():
+		c.queue_free()
+	if not _current_data:
+		return
+	var any := false
+	for iid in GameState.player_inventory.keys():
+		var qty: int = GameState.player_inventory[iid] as int
+		if qty <= 0:
+			continue
+		var item = ItemRegistry.get_item(iid)
+		if not item or item.item_type != ItemDefinition.ItemType.CONSUMABLE:
+			continue
+		any = true
+		var btn := Button.new()
+		btn.text = "Use %s  x%d" % [item.display_name, qty]
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.disabled = not _can_apply(item)
+		btn.pressed.connect(_on_use_item.bind(iid))
+		_items_box.add_child(btn)
+	if not any:
+		var none_lbl := Label.new()
+		none_lbl.text = "No consumables"
+		none_lbl.add_theme_font_size_override("font_size", 10)
+		none_lbl.modulate = Color(0.6, 0.6, 0.66)
+		_items_box.add_child(none_lbl)
+
+# Whether this consumable would do anything on the current squad (so we can grey out the button).
+func _can_apply(item) -> bool:
+	if not _current_data:
+		return false
+	if item.revive_percent > 0.0:
+		for u in _current_data.units:
+			if not u.is_alive:
+				return true
+		return false
+	if item.heal_percent > 0.0:
+		for u in _current_data.units:
+			if u.is_alive and u.hp < u.max_hp:
+				return true
+		return false
+	return false
+
+func _on_use_item(item_id: String) -> void:
+	if not _current_data:
+		return
+	var res: Dictionary = GameState.use_consumable(_current_data, item_id)
+	if res.get("ok", false):
+		show_squad(_current_data)  # refresh HP bars + button counts
 
 func _make_slot() -> Control:
 	var slot := Control.new()
@@ -188,6 +249,7 @@ func show_squad(data: SquadData) -> void:
 	if not data:
 		return
 	visible = true
+	_current_data = data
 
 	var leader := data.get_leader()
 	if leader:
@@ -208,8 +270,16 @@ func show_squad(data: SquadData) -> void:
 	_movement_lbl.text = "Movement: " + (MOVEMENT_NAMES[mt_idx] if mt_idx < MOVEMENT_NAMES.size() else "???")
 	_speed_lbl.text = "Speed: %.1f u/s" % data.move_speed
 
+	# Only offer the field "Use" action for the player's own squads.
+	if data.faction == TerrainDefs.Faction.PLAYER:
+		_items_box.visible = true
+		_rebuild_items()
+	else:
+		_items_box.visible = false
+
 func hide_inspector() -> void:
 	visible = false
+	_current_data = null
 
 func _on_slot_input(event: InputEvent, slot: Control) -> void:
 	if event is InputEventMouseButton:

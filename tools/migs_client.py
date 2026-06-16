@@ -51,14 +51,20 @@ FACTION         = {0: "Player", 1: "Vanguard", 2: "Iron Pact", 3: "Shadow Order"
 # Transport
 # ---------------------------------------------------------------------------
 
-def send(cmd: dict, delay: float = 0.4) -> dict:
-    """Send one JSON command over raw TCP and return the parsed response."""
+def send(cmd: dict, delay: float = 0.0) -> dict:
+    """Send one JSON command over raw TCP and return the parsed response.
+
+    The server closes the connection right after replying, so recv() blocks until
+    the real response arrives and then gets EOF — no fixed wait needed (the legacy
+    `delay` is kept only as an optional settle hint for a few scene-rebuild commands).
+    """
     s = socket.socket()
+    s.settimeout(5.0)            # bound connect + recv so a stalled server can't hang the caller
     s.connect((HOST, PORT))
     s.sendall((json.dumps(cmd) + "\n").encode())
-    time.sleep(delay)
+    if delay:
+        time.sleep(delay)
     data = b""
-    s.settimeout(3.0)
     try:
         while True:
             chunk = s.recv(65536)
@@ -68,7 +74,7 @@ def send(cmd: dict, delay: float = 0.4) -> dict:
     except socket.timeout:
         pass
     s.close()
-    return json.loads(data.decode())
+    return json.loads(data.decode()) if data else {}
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +222,16 @@ def capture_town(town_id: str, faction: int = 0) -> dict:
 # Campaign
 # ---------------------------------------------------------------------------
 
+def snapshot_roster() -> dict:
+    """Deep-copy the current persistent roster server-side (for win-rate re-runs)."""
+    return send({"action": "snapshot_roster"})
+
+def restore_roster() -> dict:
+    """Restore persistent_roster from the last snapshot (re-run a scenario from the same state)."""
+    return send({"action": "restore_roster"})
+
 def start_campaign(scenario_idx: int = 0, permadeath: bool = False,
-                   num_squads: int = 1) -> dict:
+                   num_squads: int = 1, skip_rewards: bool = False) -> dict:
     """
     Start (or restart) a campaign run at the given scenario index.
     num_squads > 1 splits the full persistent roster into that many squads
@@ -226,7 +240,7 @@ def start_campaign(scenario_idx: int = 0, permadeath: bool = False,
     """
     return send(
         {"action": "start_campaign", "scenario_idx": scenario_idx,
-         "permadeath": permadeath, "num_squads": num_squads},
+         "permadeath": permadeath, "num_squads": num_squads, "skip_rewards": skip_rewards},
         delay=1.5,
     )
 
@@ -297,6 +311,18 @@ def move_squad(squad_id: str, town_id: str = None,
 def set_time_scale(scale: float) -> dict:
     """Set Engine.time_scale (clamped 0.1-20) to fast-forward real-time play."""
     return send({"action": "set_time_scale", "scale": scale}, delay=0.15)
+
+def use_item(squad_id: str, item_id: str, target_unit_name: str = "") -> dict:
+    """
+    Use a CONSUMABLE from the player bag on a live squad (the explicit overworld
+    "Use" action). Routes through GameState.use_consumable, which heals / squad-heals
+    / revives and decrements the bag. squad_id is the overworld instance-id handle.
+    Returns {ok, item} on success or {ok:false, msg} (e.g. "no valid target").
+    """
+    cmd = {"action": "use_item", "id": str(squad_id), "item": item_id}
+    if target_unit_name:
+        cmd["target"] = target_unit_name
+    return send(cmd, delay=0.15)
 
 
 # ---------------------------------------------------------------------------

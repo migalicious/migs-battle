@@ -4,12 +4,12 @@ extends Node
 const _SQUAD_SCENE := preload("res://scenes/squads/Squad.tscn")
 
 @export var controlled_faction: int = TerrainDefs.Faction.ENEMY_A
-@export var difficulty_mult: float = 1.0
 
 var tick_timer: float = 0.0
 
 var _map_manager: MapManager = null
 var _squad_controller: SquadController = null
+var _diff: DifficultyConfig = null   # active difficulty config (enemy levers)
 
 func _ready() -> void:
 	call_deferred("_setup")
@@ -17,7 +17,7 @@ func _ready() -> void:
 func _setup() -> void:
 	_map_manager = get_parent().get_node("MapManager") as MapManager
 	_squad_controller = get_parent().get_node("Squads") as SquadController
-	difficulty_mult = GameState.enemy_difficulty_mult
+	_diff = GameState.get_difficulty()
 	if _map_manager and _squad_controller:
 		_initial_spawn()
 
@@ -53,13 +53,14 @@ func _initial_spawn() -> void:
 	# 3. Roaming patrols (additive to garrisons), spawned around the HQ so they
 	#    spread out and the player runs into them mid-map. (The faction owns only
 	#    its HQ + claimed castles at spawn, so roamers can't come from owned towns.)
-	for r in range(GameBalance.AI_MAX_ROAMERS):
+	var roamers: int = _diff.roamers_per_faction if _diff else GameBalance.AI_MAX_ROAMERS
+	for r in range(roamers):
 		var data := _build_template(ti)
 		data.squad_id = "ai_%d_%d" % [controlled_faction, ti]
 		_equip_template_items(data, ti)
 		var sq: Squad = _SQUAD_SCENE.instantiate() as Squad
 		_squad_controller.add_child(sq)
-		var ang := TAU * float(r) / float(maxi(1, GameBalance.AI_MAX_ROAMERS))
+		var ang := TAU * float(r) / float(maxi(1, roamers))
 		sq.global_position = Vector3(
 			hq.global_position.x + cos(ang) * 2.5, 0.5, hq.global_position.z + sin(ang) * 2.5)
 		sq.setup(data)
@@ -193,11 +194,12 @@ func _find_patrol_target(_squad: Squad) -> TownNode:
 # ── Squad Templates ───────────────────────────────────────────────────────────
 
 func _allowed_templates() -> Array[int]:
-	if difficulty_mult <= 0.80:
+	var tier := _diff.template_tier if _diff else 1
+	if tier <= 0:
 		return [1, 3]         # B(4u) + D(3u) — early
-	elif difficulty_mult < 0.95:
+	elif tier == 1:
 		return [0, 1, 3]      # + A(5u) — mid-early
-	elif difficulty_mult < 1.10:
+	elif tier == 2:
 		return [4, 1, 2, 3]   # E(brutes) replaces A; C(paladin) enters — mid-late
 	else:
 		return [5, 1, 4, 2]   # F(cavalry) + E(brutes) as primary; B + C as support — late
@@ -261,14 +263,15 @@ func _template_e() -> SquadData:
 	return d
 
 func _template_hq_garrison() -> SquadData:
-	# HQ defender. Deliberately LIGHT: an HQ should require a fight to take, but
-	# stay winnable in a single decisive battle. A garrison heals between assaults
-	# (garrison healing + heal-before-battle), so a defender that can't be wiped in
-	# one engagement would soft-lock the map. Scales with difficulty via _add().
+	# Stronghold defender. Size from the difficulty config (a knight leader + archers).
+	# Kept modest so an assault stays winnable (a garrison heals between assaults).
 	var d := SquadData.new()
 	d.faction = controlled_faction
-	_add(d, "knight", "HQ Guard",  0, 0, true,  4)
-	_add(d, "archer", "HQ Sentry", 1, 0, false, 3)
+	var size: int = _diff.garrison_size if _diff else 2
+	_add(d, "knight", "HQ Guard", 0, 0, true, 4)
+	var slots := [Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)]
+	for i in range(mini(maxi(0, size - 1), slots.size())):
+		_add(d, "archer", "HQ Sentry", slots[i].x, slots[i].y, false, 3)
 	return d
 
 func _template_f() -> SquadData:
@@ -282,10 +285,20 @@ func _template_f() -> SquadData:
 	return d
 
 func _add(data: SquadData, class_id: String, uname: String, row: int, col: int, is_leader: bool, level: int) -> void:
-	var scaled_level := maxi(1, int(float(level) * difficulty_mult))
-	var unit := UnitRegistry.create_unit(class_id, scaled_level)
+	var eff_level := maxi(1, level + _diff.enemy_level_bonus)
+	var unit := UnitRegistry.create_unit(class_id, eff_level)
 	if not unit:
 		return
+	# True all-stats multiplier (unlike the old fractional level-mult, this scales actual stats).
+	var m := _diff.enemy_stat_mult
+	if m != 1.0:
+		unit.max_hp       = maxi(1, int(unit.max_hp * m))
+		unit.hp           = unit.max_hp
+		unit.strength     = maxi(1, int(unit.strength * m))
+		unit.agility      = maxi(1, int(unit.agility * m))
+		unit.intelligence = maxi(1, int(unit.intelligence * m))
+		unit.defense      = maxi(1, int(unit.defense * m))
+		unit.resistance   = maxi(1, int(unit.resistance * m))
 	unit.unit_name = uname
 	unit.row = row
 	unit.col = col
@@ -324,7 +337,8 @@ func _consider_reinforcement() -> void:
 	var current_count := GameState.get_squads_by_faction(controlled_faction).size()
 	if current_count >= GameBalance.AI_MAX_SQUADS:
 		return
-	if GameState.enemy_gold < GameBalance.AI_REINFORCE_GOLD_THRESHOLD:
+	var reinforce_cost: int = _diff.reinforce_gold_threshold if _diff else GameBalance.AI_REINFORCE_GOLD_THRESHOLD
+	if GameState.enemy_gold < reinforce_cost:
 		return
 	var spawn_town := _find_unoccupied_friendly_town()
 	if not spawn_town:
