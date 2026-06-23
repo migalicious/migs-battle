@@ -49,10 +49,18 @@ PERMADEATH  = "--permadeath" in sys.argv
 ONLY_SCEN   = _arg("--scenario", -1, int)
 SQUADS      = _arg("--squads", 3, int)
 FREE_DEPLOY = "--free-deploy" in sys.argv
+STRATEGY    = _arg("--strategy", "auto", str)  # spread | pairs | auto
+#   spread : each squad takes a distinct objective (force-concentration cap of 2 on strongholds)
+#   pairs  : squads operate in coordinated pairs sharing one stronghold target (serial assault)
+#   auto   : pairs on all_strongholds maps, spread elsewhere
 WIN_THRESHOLD = _arg("--threshold", 0.60, float)  # target win rate (average player should beat it)
-EQUIP_FRACTION    = 0.4   # share of gold an "average player" spends on passive gear up front
-CONSUMABLE_BUDGET = 0.25  # share of gold spent on healing/revive consumables up front
-CONSUMABLE_USE_HP = 0.55  # use a heal consumable on a squad parked/idle below this hp fraction
+EQUIP_FRACTION    = 0.30  # share of gold an "average player" spends on passive gear up front
+CONSUMABLE_BUDGET = 0.40  # share of gold spent on healing/revive consumables up front
+# Combat is now DECISIVE (post-battle knockback ends the old machine-gun grind), so recovery via a
+# field kit matters far more than a marginal extra stat point — a small army with no heals nibbles a
+# garrison and dies by attrition. Shifted budget from gear → consumables and retreat earlier so
+# squads survive the now-meaningful 4-round exchanges instead of fighting until wiped.
+CONSUMABLE_USE_HP = 0.60  # use a heal consumable on a squad parked/idle below this hp fraction
 
 P_OVERWORLD, P_IN_BATTLE, P_PAUSED, P_VICTORY, P_DEFEAT = 0, 1, 2, 3, 4
 
@@ -60,12 +68,25 @@ CAPTURE_HOLD_RADIUS = 2.5
 POLL_DELAY          = 0.20
 SETUP_TIMEOUT       = 12.0
 SCENARIO_TIMEOUT    = _arg("--timeout", 240.0, float)
-STALL_TICKS         = 80
+STALL_TICKS         = 120    # raised: decisive combat grinds slower (knockback walk-back + heal
+                             #         round-trips), so a progressing assault needs more patience
+                             #         before it's scored a stall (squads healing sit static a while)
 STUCK_LIMIT         = 12
 NUDGE_COOLDOWN      = 5
-HEAL_LOW            = 0.40   # retreat to heal below this hp fraction
+HEAL_LOW            = 0.45   # retreat to heal below this hp fraction (decisive combat: survive, but
+                             #         not so eager that both squads idle-heal together and stall)
 HEAL_HIGH           = 0.85   # rejoin the fight above this hp fraction
 DEPLOY_EVERY        = 25     # ticks between reserve-deploy attempts (economy permitting)
+# ── Tactical autoplayer (HQ defense, stalemate-breaking, enemy-infighting) ──
+HQ_DEFEND_RADIUS    = 3.5    # an enemy this close to the HQ (or actively capturing it) = repel it
+                             #   (tight: a passing roamer shouldn't pin a defender home for good)
+ABANDON_COOLDOWN    = 70     # ticks an abandoned stronghold stays off the target list
+# Battle-count stalemate metric: ticks under-count an assault (most of it is spent IN_BATTLE, where
+# the driver isn't called), so escalate on actual BATTLES fought at a stronghold without it falling.
+STALEMATE_BATTLES_GANG   = 4   # battles at one stronghold w/o capture → gang it (extra squad)
+STALEMATE_BATTLES_ABANDON = 8  # battles w/o capture → temp-abandon (hq_capture maps only)
+FINAL_PUSH_STRONGHOLDS   = 2   # all_strongholds: when <= this many enemy strongholds remain, all
+                               #   squads converge on ONE to finish it decisively (no enemy heal)
 
 SCENARIOS = [
     (0, "Border Skirmish"), (1, "River Crossing"), (2, "Uneasy Allies"),
@@ -118,20 +139,183 @@ def _ownership_sig(ow):
 
 # ── Multi-squad greedy driver: distinct objectives + retreat-to-heal ─────────────
 
+def _target_cap(town, n_squads, n_strongholds):
+    # FORCE CONCENTRATION: let up to 2 squads converge on a defended STRONGHOLD so they
+    # assault it in succession. Battles are 1-squad-vs-1-squad, but enemy garrisons never
+    # heal (asymmetric design), so a second squad arriving finishes off what the first
+    # wore down — instead of each squad dying alone at a separate stronghold.
+    # Gang up (cap 2 on strongholds) when EITHER:
+    #   * the army is big enough (>=3 squads) to spare two for one target and still cover
+    #     other objectives (the big-map / all-strongholds case), OR
+    #   * there's only one stronghold left to take — then splitting buys nothing, so a
+    #     small (2-squad) army should pool its force on that last garrison (the hq_capture
+    #     opener case, where a lone squad otherwise coin-flips the HQ and often stalls).
+    # Otherwise keep squads split so a small army doesn't over-commit to one place and
+    # abandon the rest of a multi-stronghold map. Plain towns are undefended → always 1.
+    if town.get("is_stronghold") and (n_squads >= 3 or n_strongholds <= 1):
+        return 2
+    return 1
+
+def _effective_mode(ow, n_squads):
+    # Resolve the active strategy for this scenario. 'auto' picks the coordinated-PAIRS strategy ONLY
+    # for small (<=2 squad) all_strongholds maps — the case a lone squad can't solo and loses
+    # piecemeal (e.g. S1 River Crossing). A 3+ squad army already concentrates fine under SPREAD
+    # (force-concentration cap of 2 on strongholds) AND needs to cover a big multi-stronghold map;
+    # forcing it into one pair would pile every squad on a single garrison and surrender the rest of
+    # the map (this regressed S3 Three Kingdoms to 0%). Everything else uses SPREAD.
+    if STRATEGY in ("spread", "pairs"):
+        return STRATEGY
+    if "all_strongholds" in ow.get("active_conditions", []) and n_squads <= 2:
+        return "pairs"
+    return "spread"
+
+def _pair_targets(psquads, towns, enemies, mem):
+    # Group squads into ordered pairs [s0,s1],[s2,s3],… (an odd squad joins the previous pair → trio)
+    # and give every member of a pair ONE shared target: the nearest not-yet-owned stronghold to the
+    # pair's centroid. Both squads converge on the same garrison and grind it down together (enemy
+    # garrisons never heal, so the second arrival finishes what the first wore down). Falls back to
+    # nearest capturable town, then nearest hostile squad, when no strongholds remain.
+    strongholds = [t for t in towns if t.get("is_stronghold")]
+    out = {}  # squad id -> ("town", town_id) | ("pos", (x, z))
+    # Ordered pairs [s0,s1],[s2,s3],… A lone trailing squad stays SOLO (its own group) and takes its
+    # own nearest stronghold — never merged into a trio, which would over-concentrate the army.
+    groups = [psquads[i:i + 2] for i in range(0, len(psquads), 2)]
+    for grp in groups:
+        cx = sum(s["x"] for s in grp) / len(grp)
+        cz = sum(s["z"] for s in grp) / len(grp)
+        # Skip strongholds blacklisted by every member of the pair (stuck-avoidance carries over).
+        bl = set.intersection(*[mem.get(s["id"], {}).get("blacklist", set()) for s in grp]) \
+            if grp else set()
+        pool = [t for t in strongholds if t["id"] not in bl] or strongholds
+        tgt = _nearest(pool, cx, cz) or _nearest(towns, cx, cz)
+        for s in grp:
+            if tgt:
+                out[s["id"]] = ("town", tgt["id"])
+            elif enemies:
+                e = _nearest(enemies, s["x"], s["z"])
+                out[s["id"]] = ("pos", (e["x"], e["z"]))
+    return out
+
+def _player_hq(ow):
+    # The player stronghold whose loss ends the game (hq_capture LOSS) — prefer an id that names the
+    # HQ, else any owned stronghold. Used to post a defender when an enemy threatens home.
+    phqs = [t for t in ow.get("towns", []) if t["faction"] == 0 and t.get("is_stronghold")]
+    if not phqs:
+        return None
+    return next((t for t in phqs if "hq" in str(t["id"]).lower()), phqs[0])
+
+def _enemy_on(town, enemies):
+    # Is a hostile squad currently sitting on this stronghold (i.e. it's actively garrisoned)?
+    # An UNdefended enemy stronghold (garrison off fighting another faction) is a free objective —
+    # preferring those is how we exploit enemy-vs-enemy infighting on three_way maps.
+    return any(_dist2(town["x"], town["z"], e["x"], e["z"]) <= 2.0 ** 2 for e in enemies)
+
+def _update_assault(ow, mem, towns, psquads, allow_abandon):
+    # Track BATTLES fought at each enemy stronghold without it falling (a true stalemate signal —
+    # earlier tick-based counting under-measured, since most of an assault is spent IN_BATTLE where
+    # the driver isn't called, so the escalation rarely fired). The `assault` counter drives GANG
+    # (throw an extra squad once a garrison has resisted several battles). When `allow_abandon`
+    # (hq_capture maps only — you can skip a hard stronghold and still win via the HQ), a stalemated
+    # stronghold is temp-abandoned; on all_strongholds you must take EVERY stronghold, so there we
+    # only gang harder, never skip (the FINAL-PUSH concentrates force instead).
+    assault = mem.setdefault("_assault", {})        # stronghold id -> battles fought there w/o capture
+    abandon = mem.setdefault("_abandon", {})
+    for tid in list(abandon):                       # decay temp-abandon cooldowns
+        abandon[tid] -= 1
+        if abandon[tid] <= 0:
+            del abandon[tid]
+    live = {t["id"] for t in towns}                 # still enemy-held & capturable
+    for tid in list(assault):                       # a stronghold that flipped (captured) resets
+        if tid not in live:
+            del assault[tid]
+    # Attribute a NEW battle (battle count rose since last tick) to the nearest stronghold that has a
+    # player squad adjacent — that's the garrison being assaulted.
+    battles_now = mem.get("_battles", 0)
+    new_battle = battles_now > mem.get("_battles_prev", 0)
+    mem["_battles_prev"] = battles_now
+    if new_battle:
+        adj = [t for t in towns if t.get("is_stronghold") and any(
+            _dist2(t["x"], t["z"], s["x"], s["z"]) <= (CAPTURE_HOLD_RADIUS + 1.5) ** 2 for s in psquads)]
+        if adj:
+            tgt = min(adj, key=lambda t: min(_dist2(t["x"], t["z"], s["x"], s["z"]) for s in psquads))
+            assault[tgt["id"]] = assault.get(tgt["id"], 0) + 1
+            if allow_abandon and assault[tgt["id"]] >= STALEMATE_BATTLES_ABANDON \
+                    and tgt["id"] not in abandon:
+                abandon[tgt["id"]] = ABANDON_COOLDOWN   # give up on this one a while; go elsewhere
+                assault[tgt["id"]] = 0
+    return assault, abandon
+
 def _drive_tick(ow, mem):
     towns   = _capturable_towns(ow)
     enemies = _hostile_enemy_squads(ow)
     owned   = _owned_towns(ow)
     psquads = sorted(_player_squads(ow), key=lambda s: s["id"])
-    claimed = set()  # town ids already targeted this tick (objective de-dup)
+    n_squads = len(psquads)
+    n_strongholds = sum(1 for t in towns if t.get("is_stronghold"))
+    mode = _effective_mode(ow, n_squads)
+    # On all_strongholds maps the win condition is pure offense (take every stronghold) against a
+    # clock, so posting a home defender or skipping a stronghold both backfire (they starve the
+    # offense and cause timeouts — observed S5 100%→50%). Reserve HQ-defense + abandon for pure
+    # hq_capture maps, where an HQ-snipe is the real loss and skipping a hard stronghold is viable.
+    hq_only = "hq_capture" in ow.get("active_conditions", []) \
+        and "all_strongholds" not in ow.get("active_conditions", [])
+    pair_tgt = _pair_targets(psquads, towns, enemies, mem) if mode == "pairs" else {}
+    assault, abandon = _update_assault(ow, mem, towns, psquads, allow_abandon=hq_only)
+    claimed = {}  # town id -> # of squads targeting it this tick (capped per _target_cap)
 
-    # Pre-claim towns squads are actively capturing so others don't pile on.
+    # ── FINAL PUSH: on an all_strongholds map, once only a few enemy strongholds remain, the spread
+    #    driver keeps rotating squads off the last defended HQs (retreat-heal) and never overwhelms
+    #    one — the army "survives but doesn't finish". When <= FINAL_PUSH_STRONGHOLDS remain, point
+    #    EVERY squad at a single one (prefer an undefended one, else nearest to the army centroid) so
+    #    they grind it down together (enemy garrisons don't heal). Retreat-heal still applies, so a
+    #    near-dead squad peels off and rejoins rather than feeding itself in. ──
+    push_target = None
+    estrongs = [t for t in towns if t.get("is_stronghold")]
+    if "all_strongholds" in ow.get("active_conditions", []) and 1 <= len(estrongs) <= FINAL_PUSH_STRONGHOLDS:
+        cx = sum(s["x"] for s in psquads) / max(1, len(psquads))
+        cz = sum(s["z"] for s in psquads) / max(1, len(psquads))
+        estrongs.sort(key=lambda t: (_enemy_on(t, enemies), _dist2(cx, cz, t["x"], t["z"])))
+        push_target = estrongs[0]
+
+    # ── HQ DEFENSE: post ONE squad home to repel an HQ-snipe (the bot otherwise loses maps when an
+    #    enemy takes its HQ while the whole army is away). Trigger is PRECISE — only when the HQ is
+    #    actively being captured (capture_owner is an enemy) or an enemy is right on top of it — so it
+    #    works on EVERY map (an HQ-snipe is a loss condition everywhere) without pinning a defender
+    #    for mere proximity on dense maps (that over-defense starved S5's offense → timeouts).
+    #    Skipped in pairs mode (2-squad all_strongholds, e.g. S1) where peeling a squad off guts the
+    #    coordinated assault. ──
+    defender_id = None
+    hq = _player_hq(ow)
+    if hq and mode != "pairs" and n_squads >= 2:
+        cap_owner = hq.get("capture_owner", -2)
+        being_capped = cap_owner not in (-2, 0)         # an enemy faction is capturing our HQ
+        enemy_on_hq = any(_dist2(hq["x"], hq["z"], e["x"], e["z"]) <= HQ_DEFEND_RADIUS ** 2
+                          for e in enemies)
+        if being_capped or enemy_on_hq:
+            on_hq = [s for s in psquads
+                     if _dist2(hq["x"], hq["z"], s["x"], s["z"]) <= CAPTURE_HOLD_RADIUS ** 2]
+            if on_hq:                                   # already someone home — keep them there
+                defender_id = on_hq[0]["id"]
+            else:                                       # send the nearest still-healthy squad home
+                cand = [s for s in psquads if s["hp_frac"] >= HEAL_LOW] or psquads
+                d = _nearest(cand, hq["x"], hq["z"])
+                defender_id = d["id"] if d else None
+
+    def _claim(tid):
+        claimed[tid] = claimed.get(tid, 0) + 1
+    def _full(town):
+        cap = _target_cap(town, n_squads, n_strongholds)
+        if town.get("is_stronghold") and assault.get(town["id"], 0) >= STALEMATE_BATTLES_GANG:
+            cap += 1   # garrison has resisted several battles → allow an extra squad to gang it down
+        return claimed.get(town["id"], 0) >= cap
+
+    # Pre-claim towns squads are actively capturing so others don't over-stack them.
     for sq in psquads:
         nt = _nearest(ow.get("towns", []), sq["x"], sq["z"])
         if nt and _dist2(sq["x"], sq["z"], nt["x"], nt["z"]) <= CAPTURE_HOLD_RADIUS ** 2 \
                 and nt["faction"] != 0 and nt.get("capturable_by_player") \
                 and nt.get("capture_owner") == 0:
-            claimed.add(nt["id"])
+            _claim(nt["id"])
 
     bag = mem.setdefault("_bag", {})
 
@@ -162,6 +346,13 @@ def _drive_tick(ow, mem):
                     move_squad(sq["id"], town_id=dest["id"])
             continue
 
+        # ── HQ DEFENSE: the posted defender returns home and holds until the threat clears ──
+        if sq["id"] == defender_id and hq:
+            if not sq["in_battle"] \
+                    and _dist2(sq["x"], sq["z"], hq["x"], hq["z"]) > CAPTURE_HOLD_RADIUS ** 2:
+                move_squad(sq["id"], town_id=hq["id"])   # else: already home, sit and intercept
+            continue
+
         if sq["in_battle"] or sq["is_moving"]:
             continue
 
@@ -170,7 +361,7 @@ def _drive_tick(ow, mem):
         if near and _dist2(sq["x"], sq["z"], near["x"], near["z"]) <= CAPTURE_HOLD_RADIUS ** 2 \
                 and near["faction"] != 0 and near.get("capturable_by_player"):
             st["stuck"] = 0
-            claimed.add(near["id"])
+            _claim(near["id"])
             if near.get("capture_owner") == 0:
                 st["nudge"] = 0
                 continue
@@ -185,38 +376,79 @@ def _drive_tick(ow, mem):
         st["stuck"] = st["stuck"] + 1 if st["last_pos"] == pos else 0
         st["last_pos"] = pos
 
-        # ── Assign nearest UNCLAIMED objective (dedup), prefer enemy HQ ──
-        avail = [t for t in towns if t["id"] not in claimed and t["id"] not in st["blacklist"]]
+        # ── FINAL PUSH override: send this squad to the shared last-stronghold target. (Skipped in
+        #    pairs mode, which already concentrates, and for the HQ defender.) ──
+        if push_target and mode != "pairs" and sq["id"] != defender_id:
+            _claim(push_target["id"])
+            move_squad(sq["id"], town_id=push_target["id"])
+            continue
+
+        # ── PAIRS strategy: follow this squad's coordinated-pair target (a shared stronghold). ──
+        if mode == "pairs" and sq["id"] in pair_tgt:
+            kind, val = pair_tgt[sq["id"]]
+            if kind == "town":
+                if st["stuck"] >= STUCK_LIMIT:
+                    st["blacklist"].add(val)   # recomputed away from on the next tick's _pair_targets
+                    st["stuck"] = 0
+                else:
+                    move_squad(sq["id"], town_id=val)
+            else:
+                move_squad(sq["id"], pos=val)
+            continue
+
+        # ── Assign objective: prefer enemy STRONGHOLDS, allowing up to 2 squads each so
+        #    they gang up on tough garrisons (de-dup only kicks in past the per-town cap).
+        #    `abandon` drops stalemated strongholds from the pool for a cooldown. ──
+        blocked = st["blacklist"] | set(abandon.keys())
+        avail = [t for t in towns if not _full(t) and t["id"] not in blocked]
         if not avail:
-            avail = [t for t in towns if t["id"] not in st["blacklist"]] or towns
-        # Prefer enemy STRONGHOLDS (HQ/castle) — owning all of them wins both
-        # hq_capture and all_strongholds; plain towns are opportunistic (income/reward).
+            avail = [t for t in towns if t["id"] not in blocked] \
+                or [t for t in towns if t["id"] not in st["blacklist"]] or towns
+        # Prefer enemy STRONGHOLDS (HQ/castle) — owning all of them wins both hq_capture and
+        # all_strongholds. Among strongholds, prefer UNDEFENDED ones (garrison off fighting another
+        # faction) then nearest — exploits enemy infighting on three_way maps (validated 5/6 config).
         strongholds = [t for t in avail if t.get("is_stronghold")]
-        pool = strongholds if strongholds else avail
-        target = _nearest(pool, sq["x"], sq["z"])
+        if strongholds:
+            strongholds.sort(key=lambda t: (_enemy_on(t, enemies),
+                                            _dist2(sq["x"], sq["z"], t["x"], t["z"])))
+            target = strongholds[0]
+        else:
+            target = _nearest(avail, sq["x"], sq["z"])
         if target and st["stuck"] >= STUCK_LIMIT:
             st["blacklist"].add(target["id"])
             st["stuck"] = 0
             rest = [t for t in avail if t["id"] != target["id"]]
             target = _nearest(rest, sq["x"], sq["z"]) or target
         if target:
-            claimed.add(target["id"])
+            _claim(target["id"])
             move_squad(sq["id"], town_id=target["id"])
         elif enemies:
             e = _nearest(enemies, sq["x"], sq["z"])
             move_squad(sq["id"], pos=(e["x"], e["z"]))
 
 def _dismiss_popup():
-    # Try the known dismissal labels in turn — robust to whatever popup is up so a
-    # diplomacy offer can never hard-stall the run (the old single-label dismiss could
-    # silently fail on an unexpected button and leave the game wedged).
-    for label in ("Refuse", "Continue", "OK", "Close", "Decline"):
+    # Try the known labels in turn — robust to whatever popup is up so it can never hard-stall the
+    # run. ACCEPT a diplomacy alliance offer FIRST (an ally is always good for the player: fewer
+    # enemies, and on all_strongholds maps the ally's strongholds drop from the win requirement),
+    # then fall back to neutral dismissals for non-alliance popups.
+    for label in ("Accept Alliance", "Continue", "OK", "Close", "Refuse", "Decline"):
         try:
             if "error" not in press_button(label):
                 info(f"Dismissed popup ({label})")
                 return
         except Exception:
             pass
+
+def _try_accept_alliance(mem):
+    # The alliance-offer popup deliberately does NOT pause the overworld, so the paused-popup path
+    # never fires for it — poll-press "Accept Alliance" to take a standing offer. No-op when none is up.
+    try:
+        if "error" not in press_button("Accept Alliance"):
+            if not mem.get("_allied"):
+                mem["_allied"] = True
+                info("Accepted alliance offer")
+    except Exception:
+        pass
 
 def _do_deploy(stats):
     """Deploy reserve squads from the HQ; track count + approx gold spent."""
@@ -289,11 +521,24 @@ def play_attempt(s_idx, s_name, start_gold, bag=None):
             continue
 
         max_squads = max(max_squads, len(_player_squads(ow)))
+        mem["_battles"] = battles   # expose live battle count to the stalemate metric (battle-based)
         _drive_tick(ow, mem)
 
         tick += 1
         if tick % DEPLOY_EVERY == 0:
             _do_deploy(stats)  # income may now afford more squads
+        if not mem.get("_allied") and tick % 8 == 0:
+            _try_accept_alliance(mem)   # accept a standing alliance offer (non-pausing popup)
+
+        # ── Early concede (anti-wander): on an all_strongholds map a lone surviving squad can never
+        #    satisfy the win condition (take EVERY stronghold) — it just wanders to the 240s timeout
+        #    racking inconclusive battles (the "stuck in a loop" symptom). If the army has COLLAPSED
+        #    from >=2 squads down to 1 with >=2 strongholds still enemy-held, the run is lost: concede
+        #    now instead of burning the clock. (Same non-win outcome, seconds instead of minutes.) ──
+        if "all_strongholds" in ow.get("active_conditions", []) and tick > 150 and max_squads >= 2 \
+                and len(_player_squads(ow)) <= 1 \
+                and sum(1 for t in _capturable_towns(ow) if t.get("is_stronghold")) >= 2:
+            return _result("defeat", ow, stall, captures, battles, stats, max_squads)
 
         sig = _ownership_sig(ow)
         captures = max(captures, sum(1 for v in ow.get("town_ownership", {}).values() if v == 0))
@@ -424,14 +669,16 @@ def play_scenario(s_idx, s_name, first):
     start_campaign(scenario_idx=s_idx, permadeath=PERMADEATH, num_squads=SQUADS)
     time.sleep(1.0)
     roster = get_campaign_state().get("roster_size")
-    gear_spent = _buy_equipment(EQUIP_FRACTION)         # average player gears up first
-    bag, cons_spent = _buy_consumables(CONSUMABLE_BUDGET)  # ...and stocks a field kit
+    # Stock the field kit FIRST: under decisive combat, a small army's survival hinges on heals/
+    # revives more than on a marginal stat point, so consumables get first call on the gold.
+    bag, cons_spent = _buy_consumables(CONSUMABLE_BUDGET)
+    gear_spent = _buy_equipment(EQUIP_FRACTION)         # ...then gear up with what remains
     snapshot_roster()                                   # capture the equipped pre-scenario state
     start_gold = get_campaign_state().get("player_gold", 0)
     bag_str = ", ".join(f"{q}×{i}" for i, q in bag.items()) or "none"
     info(f"Roster {roster}  gold(after gear+kit)={start_gold}  gear_spent={gear_spent}  "
          f"kit_spent={cons_spent} [{bag_str}]  squads={SQUADS}  target={WIN_THRESHOLD:.0%}  "
-         f"deploy={'FREE' if FREE_DEPLOY else 'paid'}")
+         f"deploy={'FREE' if FREE_DEPLOY else 'paid'}  strategy={STRATEGY}")
 
     wins = surv_sum = battles_sum = deploys_sum = 0
     for attempt in range(1, RUNS + 1):

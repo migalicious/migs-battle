@@ -273,7 +273,24 @@ func _check_all_strongholds() -> int:
 			strongholds.append(town)
 	if strongholds.is_empty():
 		return -1
+	# PLAYER wins when NO hostile faction holds a stronghold — i.e. every stronghold is owned by the
+	# player or one of the player's ALLIES. (Hostility-aware, matching the hq_capture check above: an
+	# accepted alliance correctly drops that faction's strongholds from the requirement. The old code
+	# demanded the player own EVERY stronghold including an ally's, which made a player alliance on an
+	# all_strongholds map unwinnable.)
+	var no_hostile_stronghold := true
+	for town in strongholds:
+		var owner_a: int = int(town_ownership.get(town.town_data.town_id, town.town_data.starting_faction))
+		if are_hostile(TerrainDefs.Faction.PLAYER, owner_a):
+			no_hostile_stronghold = false
+			break
+	if no_hostile_stronghold:
+		return TerrainDefs.Faction.PLAYER
+	# Otherwise keep the original "a single (non-player) faction owns every stronghold" steamroll check
+	# so an enemy sweep still resolves as before.
 	for faction in active_factions:
+		if faction == TerrainDefs.Faction.PLAYER:
+			continue
 		var owns_all := true
 		for town in strongholds:
 			var town_owner: int = int(town_ownership.get(town.town_data.town_id, town.town_data.starting_faction))

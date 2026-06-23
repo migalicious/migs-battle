@@ -41,6 +41,18 @@ func _load_scenario_events() -> void:
 			offer.event_id = "s2_vanguard_offer"
 			_pending_events.append(offer)
 
+		3:  # "Three Kingdoms" — three-way war; if the player is struggling, one faction offers to
+			#   ally against the other (turns the 1-vs-2 into 2-vs-1, and an ally's strongholds no
+			#   longer count toward the all_strongholds win — see GameState._check_all_strongholds).
+			var kingdoms_offer := _DiplomacyEvent.new()
+			kingdoms_offer.event_type = _DiplomacyEvent.EventType.ALLIANCE_OFFER
+			kingdoms_offer.from_faction = TerrainDefs.Faction.ENEMY_A
+			kingdoms_offer.to_faction = TerrainDefs.Faction.PLAYER
+			kingdoms_offer.trigger_condition = "player_behind"
+			kingdoms_offer.description = "The Vanguard sees the Iron Pact rising. \"Stand with us against them, and our quarrel can wait.\""
+			kingdoms_offer.event_id = "s3_kingdoms_offer"
+			_pending_events.append(kingdoms_offer)
+
 		4:  # "The Shadow Rises" — Shadow Order appears; may offer terms if player struggles
 			var shadow_offer := _DiplomacyEvent.new()
 			shadow_offer.event_type = _DiplomacyEvent.EventType.ALLIANCE_OFFER

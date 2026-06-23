@@ -33,6 +33,8 @@ func on_squads_collided(sq_a: Squad, sq_b: Squad) -> void:
 		return  # a deferred collision signal can fire after a squad was freed
 	if _in_battle or sq_a.in_battle or sq_b.in_battle:
 		return
+	if sq_a.is_invulnerable() or sq_b.is_invulnerable():
+		return  # post-battle recoil window — let the squads separate before they can re-engage
 	if not GameState.are_hostile(sq_a.faction, sq_b.faction):
 		return
 
@@ -106,6 +108,42 @@ func _apply_result() -> void:
 			_handle_loser(_current_defender)
 		else:
 			_current_defender.in_battle = false
+
+	# Both sides survived (common under "no free healing" — rounds run out and nobody is wiped).
+	# Without intervention the two squads stay physically stacked and re-collide ~0.5s later, with
+	# no player input possible between identical fights. Give both a brief invulnerability window and
+	# slide the loser away so they actually separate.
+	if atk_ok and def_ok \
+			and not _current_result.attacker_wiped and not _current_result.defender_wiped:
+		_apply_recoil(_current_attacker, _current_defender)
+
+# Determine winner/loser of a non-wipe battle and apply post-battle recoil to both squads.
+func _apply_recoil(attacker: Squad, defender: Squad) -> void:
+	var atk_frac := _hp_fraction(attacker.squad_data)
+	var def_frac := _hp_fraction(defender.squad_data)
+	# Higher remaining HP fraction wins; a tie goes to the attacker (the initiator).
+	var winner := attacker if atk_frac >= def_frac else defender
+	var loser := defender if winner == attacker else attacker
+
+	# Knock the loser away from the winner's line of advance. If the winner was moving, push along
+	# its heading; if it was idle, push the loser back the way it came (away from the winner).
+	var dir: Vector3 = winner._last_heading
+	if dir.length() <= 0.1:
+		dir = loser.global_position - winner.global_position
+		dir.y = 0.0
+		dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+
+	winner.apply_battle_recoil(Vector3.ZERO)
+	loser.apply_battle_recoil(dir)
+
+func _hp_fraction(data: SquadData) -> float:
+	var cur := 0
+	var maximum := 0
+	for u in data.units:
+		if u.is_alive:
+			cur += u.hp
+			maximum += u.max_hp
+	return float(cur) / float(maxi(maximum, 1))
 
 func _apply_unit_states(data: SquadData, states: Array[UnitData]) -> void:
 	for state in states:

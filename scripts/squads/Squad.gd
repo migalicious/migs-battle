@@ -39,6 +39,14 @@ var _is_flying: bool = false
 var _is_aquatic: bool = false
 var _path_line: MeshInstance3D = null
 
+# Post-battle recoil (see apply_battle_recoil / _physics_process). After a battle both squads get
+# a brief invulnerability window so they can't instantly re-collide while still stacked; the loser
+# also slides away along _knockback_dir.
+var _invuln_time: float = 0.0
+var _knockback_time: float = 0.0
+var _knockback_dir: Vector3 = Vector3.ZERO
+var _last_heading: Vector3 = Vector3.ZERO   # last non-zero move direction; used to aim knockback
+
 func _ready() -> void:
 	# Capsule body mesh
 	var cap_mesh := CapsuleMesh.new()
@@ -165,6 +173,17 @@ func _garrison_contested() -> bool:
 	return false
 
 func _physics_process(delta: float) -> void:
+	# Post-battle recoil takes priority over everything else. Tick the invuln window down, and while
+	# the loser is being knocked back, slide it along _knockback_dir and skip nav/stuck logic so the
+	# pathfinder doesn't immediately fight the slide.
+	if _invuln_time > 0.0:
+		_invuln_time = maxf(0.0, _invuln_time - delta)
+	if _knockback_time > 0.0:
+		_knockback_time = maxf(0.0, _knockback_time - delta)
+		velocity = _knockback_dir * (GameBalance.KNOCKBACK_DIST / GameBalance.KNOCKBACK_TIME)
+		move_and_slide()
+		return
+
 	if is_garrisoned:
 		velocity = Vector3.ZERO
 		return
@@ -199,6 +218,11 @@ func _physics_process(delta: float) -> void:
 				velocity = dir.normalized() * squad_data.move_speed
 			else:
 				velocity = Vector3.ZERO
+
+	# Remember which way we're heading — the only record of movement direction, used to aim the
+	# loser's knockback away from the winner's line of advance.
+	if velocity.length() > 0.05:
+		_last_heading = Vector3(velocity.x, 0.0, velocity.z).normalized()
 
 	move_and_slide()
 	_update_terrain_speed()
@@ -308,7 +332,7 @@ func retreat_to(world_pos: Vector3) -> void:
 # Nearest hostile squad physically blocking us (within BLOCK_RANGE), if any — used by
 # stuck detection to force a battle when wedged against an enemy (e.g. a town garrison).
 func _blocking_hostile() -> Squad:
-	if in_battle:
+	if in_battle or is_invulnerable():
 		return null
 	var best: Squad = null
 	var best_d := BLOCK_RANGE * BLOCK_RANGE
@@ -316,13 +340,27 @@ func _blocking_hostile() -> Squad:
 		if not GameState.are_hostile(faction, f):
 			continue
 		for sq in GameState.get_squads_by_faction(f):
-			if not is_instance_valid(sq) or sq.in_battle:
+			if not is_instance_valid(sq) or sq.in_battle or sq.is_invulnerable():
 				continue
 			var d := global_position.distance_squared_to(sq.global_position)
 			if d < best_d:
 				best_d = d
 				best = sq
 	return best
+
+# True during the brief post-battle window in which this squad cannot be drawn into a new battle.
+func is_invulnerable() -> bool:
+	return _invuln_time > 0.0
+
+# Apply post-battle recoil. Both participants call this; the loser passes a non-zero direction to be
+# slid away from the winner's advance, the winner passes Vector3.ZERO (invulnerability only).
+func apply_battle_recoil(knockback_dir: Vector3) -> void:
+	_invuln_time = GameBalance.BATTLE_INVULN_TIME
+	# A garrisoned squad (player healing in a town) stays anchored to its tile — invuln only, no slide.
+	if knockback_dir != Vector3.ZERO and not is_garrisoned:
+		_knockback_dir = knockback_dir.normalized()
+		_knockback_time = GameBalance.KNOCKBACK_TIME
+		_is_moving = false   # drop the prior move order so it doesn't reassert mid-slide
 
 func _is_on_impassable_terrain() -> bool:
 	if not map_manager or not squad_data:
@@ -344,8 +382,9 @@ func _faction_color(f: int) -> Color:
 	return TerrainDefs.FACTION_COLORS.get(f, Color.WHITE)
 
 func _on_area_entered(area: Area3D) -> void:
-	if in_battle:
+	if in_battle or is_invulnerable():
 		return
 	var other := area.get_parent() as Squad
-	if other and GameState.are_hostile(faction, other.faction) and not other.in_battle:
+	if other and GameState.are_hostile(faction, other.faction) \
+			and not other.in_battle and not other.is_invulnerable():
 		squad_collided_with_enemy.emit(self, other)

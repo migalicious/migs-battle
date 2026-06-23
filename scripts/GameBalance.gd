@@ -22,3 +22,10 @@ const AI_GARRISON_CASTLES: int = 2  # nearest neutral castles each faction claim
 const AI_MAX_ROAMERS: int = 3       # roaming squads per faction (additive to HQ/castle garrisons)
 const BETWEEN_MAP_RECOVER_COST: int = 50
 const GARRISON_HEAL_RATE: float = 0.10  # fraction of max_hp recovered per second (PLAYER garrisons only)
+
+# Post-battle recoil. When a battle ends with neither side wiped, both squads are briefly
+# invulnerable to re-collision and the loser slides away — preventing zero-input machine-gun
+# re-battles between two squads left physically stacked on the same tile.
+const BATTLE_INVULN_TIME: float = 1.0   # seconds both squads ignore re-collision after a battle
+const KNOCKBACK_TIME: float = 0.3       # seconds the loser slides
+const KNOCKBACK_DIST: float = 2.5       # world units pushed (> DetectionArea 1.1 and BLOCK_RANGE 1.6)
